@@ -1,8 +1,8 @@
 As in the IPv4 cooked packet examples, here we fill out all values, but only including the destination (i.e., next hop) layer 2 (data link) information and not the source MAC address. Similar to IPv4, this is called a "cooked packet." We must know the MAC address of the router/host the frames will be routed to next*.<br/<br/>
 
-    *Based on questions received, some explanation is in order...
+*Based on questions received, some explanation is in order...
 
-    First I recommend checking out the OSI model.
+First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
 
     The super short version of the story is this:
       MAC addresses are link-local addresses and are only used to route packets on a LAN, that is,
