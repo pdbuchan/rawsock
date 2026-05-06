@@ -1,5 +1,5 @@
 
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@yahoo.com)
+/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
