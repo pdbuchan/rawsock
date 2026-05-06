@@ -8,9 +8,9 @@ In these examples, we fill out all values, but only including the destination (i
     icmp4_cooked.c 	Send ICMP Echo Request with data.
     udp4_cooked.c 	Send UDP packet with data.
 
-    *Based on questions received, some explanation is in order...
+*Based on questions received, some explanation is in order...
 
-    First I recommend checking out the OSI model.
+First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
 
     The super short version of the story is this:
       MAC addresses are link-local addresses and are only used to route packets on a LAN, that is,
