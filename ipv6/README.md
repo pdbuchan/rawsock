@@ -20,3 +20,22 @@ For more details on how to use AH and ESP in various network environments, see t
 
 The IP security (IPsec) protocols (AH and ESP) can be used in either transport mode or tunnel mode. Section 5.1.2.2 of [RFC 4301](https://datatracker.ietf.org/doc/html/rfc4301) states that in tunnel mode, the inner extension headers, if any, are not copied to become outer extension headers, although new outer extension headers can be created as desired.
 
+*Based on questions received, some explanation is in order...
+
+First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
+
+    The super short version of the story is this:
+      MAC addresses are link-local addresses and are only used to route packets on a LAN, that is,
+  	  amongst interfaces (wireless cards, ethernet cards, etc.) that are on the same local network.
+  	  For ethernet, this means all the ethernet cards attached to the same cable (and via switches).
+
+      IP addresses are for traversing outside a LAN to a node located within some other LAN.
+
+      What this means is, the destination MAC address in an ethernet frame is the MAC address of the
+	    interface of the NEXT HOP, not the final destination.
+
+      If I send a packet to google.com, the packet I send will have the destination MAC address as
+  	  my home router's interface and the destination IP address of google.com.
+
+      With IPv4, we find the MAC address of another node's interface on our LAN using ARP.
+      With IPv6, we use the neighbor discovery process.
