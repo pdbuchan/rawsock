@@ -13,7 +13,9 @@ In these examples, we fill out all values, but only including the destination (i
     First I recommend checking out the OSI model.
 
     The super short version of the story is this:
-      MAC addresses are link-local addresses and are only used to route packets on a LAN, that is, amongst interfaces (wireless cards, ethernet cards, etc.) that are on the same local network. For ethernet, this means all the ethernet cards attached to the same cable (and via switches).
+      MAC addresses are link-local addresses and are only used to route packets on a LAN, that is,
+	  amongst interfaces (wireless cards, ethernet cards, etc.) that are on the same local network.
+	  For ethernet, this means all the ethernet cards attached to the same cable (and via switches).
 
       IP addresses are for traversing outside a LAN to a node located within some other LAN.
 
