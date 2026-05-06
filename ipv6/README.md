@@ -28,7 +28,7 @@ First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI
 
 **<ins>Authentication Header (AH) and Encapsulating Security Payload (ESP) Header</ins>**<br/><br/>
 
-The following few tables give examples of the authentication extension header (AH) and the encapsulating security payload (ESP) extension header.<br/><br/>
+Examples are given which use the authentication extension header (AH) and the encapsulating security payload (ESP) extension header.<br/><br/>
 
 The AH provides data origin and integrity authentication. The ESP header provides confidentiality, data origin and integrity authentication, an anti-replay service, and limited traffic flow confidentiality.<br/><br/>
 
