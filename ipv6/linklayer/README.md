@@ -1,3 +1,5 @@
+## Link-Layer - We provide everything
+
     sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));
 
 If we have used neighbor discovery to determine the MAC address of a link-local router or host, we can go ahead and modify all parameters within the ethernet frame.
