@@ -1,4 +1,4 @@
-In these examples, we fill out all values, but only including the destination (i.e., next-hop) layer 2 (data link) information (not source MAC address). This is called a "cooked packet." To do this, we must know the MAC address of the router/host the frames will be routed to next*.<br/>
+In these examples, we fill out all values, but only including the destination (i.e., next-hop) layer 2 (data link) information (not source MAC address). This is called a "cooked packet." To do this, we must know the MAC address of the router/host the frames will be routed to next*.
 
     sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL));
 	
