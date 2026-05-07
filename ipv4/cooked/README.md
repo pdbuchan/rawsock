@@ -4,7 +4,7 @@ In these examples, we fill out all values, but only including the destination (i
 	
 We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.
 
-| Example | Description |
+| File | Description |
 | :--- | :--- |
 | tcp4_cooked.c | Send SYN packet (an example with no TCP data). |
 | get4_cooked.c | Send HTTP GET (an example with TCP data) (note). |
