@@ -5,5 +5,5 @@ Here we send a TCP packet with a hop-by-hop extension header, authentication ext
 | File | Description |
 | :--- | :--- |
 | data | 12390-byte file to use as upper layer protocol data |
-| tcp6_hop_auth-tr_frag.c | Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in transport mode), and enough data to require fragmentation. |
-| tcp6_hop_auth-tun_frag.c | Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in tunnel mode), and enough data to require fragmentation. |
+| <nobr>tcp6_hop_auth-tr_frag.c</nobr> | Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in transport mode), and enough data to require fragmentation. |
+| <nobr>tcp6_hop_auth-tun_frag.c</nobr> | Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in tunnel mode), and enough data to require fragmentation. |
