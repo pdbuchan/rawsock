@@ -4,12 +4,12 @@ Three combinations of the Domain, Type, and Protocol arguments are shown here. T
 
 ## Combination 1: hdrincl
   `sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);`
-  The kernel fills out layer 2 (data link) information (MAC addresses) for us.
+The kernel fills out layer 2 (data link) information (MAC addresses) for us.
 
 ## Combination 2: linklayer
   `sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));`
-  We provide layer 2 (data link) information. i.e., we specify ethernet frame header with MAC addresses.
+We provide layer 2 (data link) information. i.e., we specify ethernet frame header with MAC addresses.
 
 ## Combination 3: cooked
   `sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL));`
-  We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.
+We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.
