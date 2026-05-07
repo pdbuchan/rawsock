@@ -1,4 +1,4 @@
-Routing Extension Header (Type 3) - [RFC 6554](https://datatracker.ietf.org/doc/html/rfc6554)
+## Routing Extension Header (Type 3) - [RFC 6554](https://datatracker.ietf.org/doc/html/rfc6554)
 
 There are several possible types of routing header, specified in the Routing Type field of the header itself. Types 0 and 1 routing headers have been deprecated (IANA Parameters List).
 
