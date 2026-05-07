@@ -19,11 +19,11 @@ Here we send a TCP packet with a hop-by-hop extension header, authentication ext
   <td>12390-byte file to use as upper layer protocol data</td>
 </tr>
 <tr>
-  <td nowrap><code>tcp6_hop_auth-tr_frag.c</code>code></td>td>
-  <td></td>Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in transport mode), and enough data to require fragmentation.</tr>td>
+  <td nowrap><code>tcp6_hop_auth-tr_frag.c</code>code></td>
+  <td>Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in transport mode), and enough data to require fragmentation.</td>
 </tr>
 <tr>
   <td nowrap><code>tcp6_hop_auth-tun_frag.c</code></td>
-  <td>Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in tunnel mode), and enough data to require fragmentation./td>
+  <td>Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in tunnel mode), and enough data to require fragmentation.</td>
 </tr>
 </table>
