@@ -1,4 +1,4 @@
-## Link-Layer - We provide everything
+## Link Layer - We provide everything
 
     sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));
 
