@@ -15,7 +15,15 @@ Here we send a TCP packet with a hop-by-hop extension header, authentication ext
   <th>Description</th>
 </tr>
 <tr>
-  <td nowrap><code>very_long_filename_example.c</code></td>
-  <td>blah blah</td>
+  <td nowrap><code>data</code></td>
+  <td>12390-byte file to use as upper layer protocol data</td>
+</tr>
+<tr>
+  <td nowrap><code>tcp6_hop_auth-tr_frag.c</code>code></td>td>
+  <td></td>Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in transport mode), and enough data to require fragmentation.</tr>td>
+</tr>
+<tr>
+  <td nowrap><code>tcp6_hop_auth-tun_frag.c</code></td>
+  <td>Send TCP packet with a hop-by-hop extension header with router alert option, authentication extension header (in tunnel mode), and enough data to require fragmentation./td>
 </tr>
 </table>
