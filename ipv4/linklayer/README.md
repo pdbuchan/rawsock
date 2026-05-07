@@ -1,4 +1,4 @@
-## Link Layer - we provide everything
+## Link Layer - We provide everything
 
 In these examples, we fill out all values, including the layer 2 (data link) information (source and next-hop MAC addresses). To do this, we must know the MAC address of the router/host the frames will be routed to next (more explanation), as well as the MAC address of the network interface ("network card") we're sending the packet from.
 
