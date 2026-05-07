@@ -1,4 +1,6 @@
-These examples include IP options and TCP options.
+## IP and TCP Options
+
+These examples include various combinations of IP and TCP options.
 
 | File | Description |
 | :--- | :--- |
