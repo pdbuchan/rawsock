@@ -1,6 +1,6 @@
 ## Ancillary Data Method Examples
 
-For these example, we send ICMP Echo Request Without Using Neighbor Discovery (ND).
+For these example, we send ICMP Echo Requests without using Neighbor Discovery (ND).
 
 Examples `icmp6_ancillary1.c` and `icmp6_ancillary2.c` use the `bind()` function to bind the socket to the source IP address. Example `icmp6_ancillary3.c` sets the source IP address using ancillary data. In either case, the supplied source address must actually be assigned to the interface or else the `sendto()` call will fail and the packet won't be sent.
 
