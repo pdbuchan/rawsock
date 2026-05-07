@@ -1,13 +1,15 @@
-Three combinations of the Domain, Type, and Protocol arguments are shown here. There are other possible combinations you could try. The packet parameters that can be modified are determined by which combination you choose.<br/><br/>
+# IPv4 Raw Sockets
 
-**Combination 1: hdrincl**<br/>
-  sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);<br/>
-  The kernel fills out layer 2 (data link) information (MAC addresses) for us.<br/><br/>
+Three combinations of the Domain, Type, and Protocol arguments are shown here. There are other possible combinations you could try. The packet parameters that can be modified are determined by which combination you choose.
 
-**Combination 2: linklayer**<br/>
- 	sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));<br/>
-	We provide layer 2 (data link) information. i.e., we specify ethernet frame header with MAC addresses.<br/><br/>
+## Combination 1: hdrincl
+  `sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);`
+  The kernel fills out layer 2 (data link) information (MAC addresses) for us.
 
-**Combination 3: cooked**<br/>
-  sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL));<br/>
-	We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.
+## Combination 2: linklayer
+  `sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));`
+  We provide layer 2 (data link) information. i.e., we specify ethernet frame header with MAC addresses.
+
+## Combination 3: cooked
+  `sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL));`
+  We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.
