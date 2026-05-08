@@ -9,6 +9,10 @@ The kernel fills out layer 2 (data link) information (MAC addresses) for us.
 | File | Description |
 | :--- | :--- |
 | tcp4.c | Send SYN packet (an example with no TCP data). |
-| get4.c | Send HTTP GET (an example with TCP data)*. |
+| get4.c | Send HTTP GET (an example with TCP data) (Note 1). |
 | icmp4.c | Send ICMP Echo Request with data. |
 | udp4.c | Send UDP packet with data. |
+
+### Note 1
+
+This HTTP GET packet will not actually get anything because we haven't gone through the [SYN, SYN-ACK, ACK process](https://en.wikipedia.org/wiki/Transmission_Control_Protocol#Connection_establishment).
