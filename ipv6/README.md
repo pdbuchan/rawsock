@@ -2,7 +2,7 @@
 
 ## IPv6 introduces the need for Neighbor Discovery
 
-In IPv6, we have less options at our disposal for modifying packet values (see [RFC 3542](https://datatracker.ietf.org/doc/html/rfc3542) and [RFC 3493](https://datatracker.ietf.org/doc/html/rfc3493)). In particular, IPv6 has no equivalent to using `setsockopt()` with the `IP_HDRINCL` flag (see /hdrincl examples). Without doing something special (using neighbor discovery), we can only change the hop limit and traffic class to arbitrary values. Neighbor discovery is the IPv6 replacement for ARP in IPv4.
+In IPv6, we have less options at our disposal for modifying packet values (see [RFC 3542](https://datatracker.ietf.org/doc/html/rfc3542) and [RFC 3493](https://datatracker.ietf.org/doc/html/rfc3493)). In particular, IPv6 has no equivalent to using `setsockopt()` with the `IP_HDRINCL` flag (see ipv4/hdrincl examples). Without doing something special (using neighbor discovery), we can only change the hop limit and traffic class to arbitrary values. Neighbor discovery is the IPv6 replacement for ARP in IPv4.
 
 If we wish to have the ability to change any parameter in the IPv6 header, we need to have the source and destination MAC addresses available*. Before trying neighbor discovery, you can take a quick look at a couple of examples where we don't use neighbor discovery, and thus can only change the hop limit and traffic class values in the IPv6 header.
 
