@@ -1,6 +1,6 @@
 ## Fragmentation
 
-These are examples of packet fragmentation. The first file, called "data", contains a list of numbers. The following three routines use it as data for the upper layer protocols. Feel free to provide to the routines your own data in any manner you prefer.
+If the size of payload exceeds what a single packet can carry, multiple packets will be needed. This process is called packet fragmentation. The first file, called "data", contains a list of numbers, and its size exceeds the capacity of one packet. The following three routines use it as data for the upper layer protocols. Feel free to provide to the routines your own data in any manner you prefer.
 
 | File | Description |
 | :--- | :--- |
