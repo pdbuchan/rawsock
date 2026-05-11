@@ -4,7 +4,7 @@ Three combinations of the *Domain*, *Type*, and *Protocol* arguments are shown h
 
 A socket descriptor is obtained with a call to `socket()`:
 
-'#include <sys/socket.h>'
+`#include <sys/socket.h>`
 
 `int sd = socket (Domain, Type, Protocol);`
 
