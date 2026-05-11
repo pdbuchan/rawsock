@@ -2,7 +2,7 @@
 
 Three combinations of the *Domain*, *Type*, and *Protocol* arguments are shown here. There are other possible combinations you could try. The packet parameters that can be modified are determined by which combination you choose.
 
-A socket descriptor is obtained with a called to `socket()`:
+A socket descriptor is obtained with a call to `socket()`:
 
 `int sd = socket (Domain, Type, Protocol);`
 
