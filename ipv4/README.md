@@ -2,7 +2,8 @@
 
 Three combinations of the *Domain*, *Type*, and *Protocol* arguments are shown here. There are other possible combinations you could try. The packet parameters that can be modified are determined by which combination you choose.
 
-`sd = socket (Domain, Type, Protocol);`
+A socket descriptor is obtained with a called to `socket()`:
+`int sd = socket (Domain, Type, Protocol);`
 
 ## Combination 1: hdrincl
 `sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);`<br/>
