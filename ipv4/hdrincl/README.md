@@ -8,8 +8,6 @@ In these examples, we tell the kernal the IP header is included (by us) by using
 
 `setsockopt (sd, IPPROTO_IP, IP_HDRINCL, &on, sizeof (on));`
 
-The kernel fills out layer 2 (data link) information (MAC addresses) for us.
-
 | File | Description |
 | :--- | :--- |
 | tcp4.c | Send SYN packet (an example with no TCP data). |
