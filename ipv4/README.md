@@ -1,6 +1,6 @@
 # IPv4 Raw Sockets
 
-Three combinations of the Domain, Type, and Protocol arguments are shown here. There are other possible combinations you could try. The packet parameters that can be modified are determined by which combination you choose.
+Three combinations of the *Domain*, *Type*, and *Protocol* arguments are shown here. There are other possible combinations you could try. The packet parameters that can be modified are determined by which combination you choose.
 
 `sd = socket (Domain, Type, Protocol);`
 
