@@ -2,7 +2,7 @@
 
 In IPv6, packet fragmentation requires the introduction of a fragment extension header. The first file, called "data", contains a list of numbers, and the following routines use it as data for the upper layer protocols. Feel free to provide to the routines your own data in any manner you prefer.
 
-Fragmentation can get complicated if there are extension headers, and if multiple extension headers are used, they must appear in a specific order (see `header_linking_and_fragmentation.c` of my [Simple Packet Sender (SPS) project](https://github.com/pdbuchan/sps/tree/main).
+Fragmentation can get complicated if there are extension headers, and if multiple extension headers are used, they must appear in a specific order (see `header_linking_and_fragmentation.c` of my [Simple Packet Sender (SPS) project](https://github.com/pdbuchan/sps).
 
 | File | Description |
 | :--- | :--- |
