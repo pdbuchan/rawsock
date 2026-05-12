@@ -24,6 +24,9 @@ If I send a packet to google.com, the packet I send will have the destination MA
 
 With IPv4, we find the MAC address of another node's interface on our LAN using ARP. With IPv6, we use the neighbor discovery process.
 
+## IPv6 introduces Extension Headers
+
+
 ## Authentication Header (AH) and Encapsulating Security Payload (ESP) Header
 
 Examples are given which use the authentication extension header (AH) and the encapsulating security payload (ESP) extension header.
