@@ -18,7 +18,6 @@ We provide Layer 2 (data link) information. i.e., we specify ethernet frame head
 
 First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
 
-The super short version of the story is this:
 MAC addresses are link-local addresses and are only used to route packets on a LAN, that is, amongst interfaces (wireless cards, ethernet cards, etc.) that are on the same local network.
 
 For ethernet, this means all the ethernet cards attached to the same cable (and via switches).
