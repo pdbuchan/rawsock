@@ -12,6 +12,8 @@ You can use either the ancillary data method, or a call to `setsockopt()` with o
 
 Extension headers are optional headers that are positioned after the IPv6 header but before the TCP, ICMP, or UDP header. You can use multiple extension headers simultaneously by linking them to each other in a chain, one after another. If multiple extension headers are used, they must appear in a specific order (see `header_linking_and_fragmentation.c` of my [Simple Packet Sender (SPS) project](https://github.com/pdbuchan/sps/tree/main).
 
+In IPv6, packet fragmentation requires the introduction of a fragment extension header. 
+
 ### Note 1
 
 First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
