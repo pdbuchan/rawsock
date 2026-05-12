@@ -26,7 +26,7 @@ With IPv4, we find the MAC address of another node's interface on our LAN using 
 
 ## IPv6 introduces Extension Headers
 
-Extension headers are optional headers that are positioned after the IPv6 header but before the TCP, ICMP, or UDP header. You can use multiple extension headers simultaneously by linking them to each other in a chain, one after another. If multiple extension headers are used, they must appear in a specific order.
+Extension headers are optional headers that are positioned after the IPv6 header but before the TCP, ICMP, or UDP header. You can use multiple extension headers simultaneously by linking them to each other in a chain, one after another. If multiple extension headers are used, they must appear in a specific order (see `header_linking_and_fragmentation.c` of my Simple Packet Send er (SPS) project.
 
 ## Authentication Header (AH) and Encapsulating Security Payload (ESP) Header
 
