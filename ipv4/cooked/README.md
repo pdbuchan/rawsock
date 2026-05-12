@@ -23,7 +23,7 @@ For ethernet, this means all the ethernet cards attached to the same cable (and 
 
 IP addresses are for traversing outside a LAN to a node located within some other LAN.
 
-What this means is, the destination MAC address in an ethernet frame is the MAC address of the interface of the NEXT HOP, not the final destination.
+What this means is, the destination MAC address in an ethernet frame is the MAC address of the interface of the *next hop*, not the final destination.
 
 If I send a packet to google.com, the packet I send will have the destination MAC address as my home router's interface and the destination IP address of google.com.
 
