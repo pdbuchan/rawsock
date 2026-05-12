@@ -8,6 +8,10 @@ If we wish to have the ability to change any parameter in the IPv6 header, we ne
 
 You can use either the ancillary data method, or a call to `setsockopt()` with option level `IPPROTO_IPV6` and option names `IPV6_TCLASS`, `IPV6_UNICAST_HOPS`, or `IPV6_MULTICAST_HOPS`. Note that changes made to the properties of the socket with `setsockopt()` will remain in effect for all packets sent through the socket, whereas ancillary data is associated with a particular packet.
 
+## IPv6 introduces Extension Headers
+
+Extension headers are optional headers that are positioned after the IPv6 header but before the TCP, ICMP, or UDP header. You can use multiple extension headers simultaneously by linking them to each other in a chain, one after another. If multiple extension headers are used, they must appear in a specific order (see `header_linking_and_fragmentation.c` of my [Simple Packet Sender (SPS) project](https://github.com/pdbuchan/sps/tree/main).
+
 ### Note 1
 
 First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
@@ -23,7 +27,3 @@ What this means is, the destination MAC address in an ethernet frame is the MAC 
 If I send a packet to google.com, the packet I send will have the destination MAC address as my home router's interface and the destination IP address of google.com.
 
 With IPv4, we find the MAC address of another node's interface on our LAN using ARP. With IPv6, we use the neighbor discovery process.
-
-## IPv6 introduces Extension Headers
-
-Extension headers are optional headers that are positioned after the IPv6 header but before the TCP, ICMP, or UDP header. You can use multiple extension headers simultaneously by linking them to each other in a chain, one after another. If multiple extension headers are used, they must appear in a specific order (see `header_linking_and_fragmentation.c` of my [Simple Packet Sender (SPS) project](https://github.com/pdbuchan/sps/tree/main).
