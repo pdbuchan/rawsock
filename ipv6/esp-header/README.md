@@ -1,5 +1,7 @@
 ## Encapsulating Security Payload (ESP) Extension Header - [RFC 4303](https://datatracker.ietf.org/doc/html/rfc4303) and [RFC 4305](https://datatracker.ietf.org/doc/html/rfc4305)
 
+The ESP header provides confidentiality, data origin and integrity authentication, an anti-replay service, and limited traffic flow confidentiality (Note 1).
+
 | File | Description |
 | :--- | :--- |
 | data | 12390-byte file to use as upper layer protocol data |
