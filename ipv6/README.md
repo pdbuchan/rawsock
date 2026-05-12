@@ -8,7 +8,7 @@ If we wish to have the ability to change any parameter in the IPv6 header, we ne
 
 You can use either the ancillary data method, or a call to `setsockopt()` with option level `IPPROTO_IPV6` and option names `IPV6_TCLASS`, `IPV6_UNICAST_HOPS`, or `IPV6_MULTICAST_HOPS`. Note that changes made to the properties of the socket with `setsockopt()` will remain in effect for all packets sent through the socket, whereas ancillary data is associated with a particular packet.
 
-##Note 1
+### Note 1
 
 First I recommend checking out the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
 
