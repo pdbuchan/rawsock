@@ -2,7 +2,7 @@
 
 These examples include various combinations of IP and TCP options.
 
-    `sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));`
+    sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));
 
 | File | Description |
 | :--- | :--- |

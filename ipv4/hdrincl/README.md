@@ -2,11 +2,11 @@
 
 In these examples, we tell the kernal the IP header is included (by us) by using `setsockopt()` and the `IP_HDRINCL` flag, and we can modify all values within the packet but the kernal fills out the Layer 2 (data link) information (source and next-hop MAC addresses) for us.
 
-    `sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);`
+    sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);
 
-    `const int on = 1;`
+    const int on = 1;
 
-    `setsockopt (sd, IPPROTO_IP, IP_HDRINCL, &on, sizeof (on));`
+    setsockopt (sd, IPPROTO_IP, IP_HDRINCL, &on, sizeof (on));
 
 | File | Description |
 | :--- | :--- |
