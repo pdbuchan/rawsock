@@ -17,5 +17,5 @@ The kernel fills out layer 2 (data link) information (MAC addresses) for us.
 We provide layer 2 (data link) information. i.e., we specify ethernet frame header with MAC addresses.
 
 ## Combination 3: cooked
-`sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL));`<br/>
+`sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IP));`<br/>
 We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.

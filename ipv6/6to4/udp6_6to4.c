@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2011-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,7 +29,6 @@
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
 #include <netdb.h>            // struct addrinfo
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl. Here, we need SIOCGIFHWADDR
 #include <net/if.h>           // struct ifreq
 #include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
@@ -42,9 +41,10 @@
 #define IP4_HDRLEN 20  // IPv4 header length
 #define IP6_HDRLEN 40  // IPv6 header length
 #define UDP_HDRLEN  8  // UDP header length, excludes data
+#define TEXT_STRINGLEN 80  // Maximum number of characters in a string
 
 // Function prototypes
-uint16_t checksum (uint16_t *, int);
+uint16_t checksum (uint8_t *, int);
 uint16_t udp6_checksum (struct ip6_hdr, struct udphdr, uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
@@ -70,9 +70,9 @@ main (int argc, char **argv) {
   datalen = 4;
 
   // Allocate memory for various arrays.
-  interface = allocate_strmem (40);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
   target4 = allocate_strmem (INET_ADDRSTRLEN);
-  target6 = allocate_strmem (INET6_ADDRSTRLEN);
+  target6 = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
   source4 = allocate_strmem (INET_ADDRSTRLEN);
   source6 = allocate_strmem (INET6_ADDRSTRLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
@@ -84,7 +84,7 @@ main (int argc, char **argv) {
   data = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send packet through.
-  strcpy (interface, "eno1");
+  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -94,7 +94,10 @@ main (int argc, char **argv) {
 
   // Use ioctl() to look up interface name and get its MAC address.
   memset (&ifr, 0, sizeof (ifr));
-  snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
+  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
+    fprintf (stderr, "Interface name too long.\n");
+    exit (EXIT_FAILURE);
+  }
   if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
     perror ("ioctl() failed to get source MAC address ");
     return (EXIT_FAILURE);
@@ -105,11 +108,10 @@ main (int argc, char **argv) {
   memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
 
   // Report source MAC address to stdout.
-  printf ("MAC address for interface %s is ", interface);
-  for (i=0; i<5; i++) {
-    printf ("%02x:", src_mac[i]);
+  fprintf (stdout, "MAC address for interface %s is ", interface);
+  for (i = 0; i < 6; i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
   }
-  printf ("%02x\n", src_mac[5]);
 
   // Fill out sockaddr_ll.
   memset (&device, 0, sizeof (device));
@@ -123,7 +125,7 @@ main (int argc, char **argv) {
     perror ("if_nametoindex() failed to obtain interface index ");
     exit (EXIT_FAILURE);
   }
-  printf ("Index for interface %s is %i\n", interface, device.sll_ifindex);
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
 
   // Set destination MAC address: you need to fill these out
   dst_mac[0] = 0xff;
@@ -143,7 +145,7 @@ main (int argc, char **argv) {
   strcpy (target4, "192.88.99.1");
 
   // Target URL or IPv6 address: you need to fill this out
-  strcpy (target6, "ipv6.google.com");
+  strncpy (target6, "ipv6.google.com", TEXT_STRINGLEN);
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
@@ -248,7 +250,7 @@ main (int argc, char **argv) {
 
   // IPv4 header checksum (16 bits) - set to 0 when calculating checksum
   ip4hdr.ip_sum = 0;
-  ip4hdr.ip_sum = checksum ((uint16_t *) &ip4hdr, IP4_HDRLEN);
+  ip4hdr.ip_sum = checksum ((uint8_t *) &ip4hdr, IP4_HDRLEN);
 
   // IPv6 header
 
@@ -293,7 +295,7 @@ main (int argc, char **argv) {
   // Fill out ethernet frame header.
 
   // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP4 header + IP6 header + UDP header + UDP data)
-  frame_length = 6 + 6 + 2 + IP4_HDRLEN + IP6_HDRLEN + UDP_HDRLEN + datalen;
+  frame_length = ETH_HDRLEN + IP4_HDRLEN + IP6_HDRLEN + UDP_HDRLEN + datalen;
 
   // Destination and Source MAC addresses
   memcpy (ether_frame, dst_mac, 6 * sizeof (uint8_t));
@@ -353,21 +355,23 @@ main (int argc, char **argv) {
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum is not guaranteed to preclude collisions.
 uint16_t
-checksum (uint16_t *addr, int len) {
+checksum (uint8_t *addr, int len) {
 
   int count = len;
-  register uint32_t sum = 0;
+  uint32_t sum = 0;
   uint16_t answer = 0;
 
   // Sum up 2-byte values until none or only one byte left.
   while (count > 1) {
-    sum += *(addr++);
+    sum += ((uint16_t) addr[0] << 8) + addr[1];
+    addr += 2;
     count -= 2;
   }
 
-  // Add left-over byte, if any.
+  // Add left-over byte, if any. For an odd-length buffer, the
+  // remaining byte is the high-order byte of the final 16-bit word.
   if (count > 0) {
-    sum += *(uint8_t *) addr;
+    sum += ((uint16_t) addr[0] << 8);
   }
 
   // Fold 32-bit sum into 16 bits; we lose information by doing this,
@@ -377,10 +381,11 @@ checksum (uint16_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum.
+  // Checksum is one's compliment of sum. Return it in network byte order
+  // so it can be copied directly into the packet header.
   answer = ~sum;
 
-  return (answer);
+  return (htons (answer));
 }
 
 // Build IPv6 UDP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
@@ -390,7 +395,6 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *payload, int
   char buf[IP_MAXPACKET];
   char *ptr;
   int chksumlen = 0;
-  int i;
 
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
@@ -447,13 +451,12 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *payload, int
   chksumlen += payloadlen;
 
   // Pad to the next 16-bit boundary
-  for (i=0; i<payloadlen%2; i++, ptr++) {
+  if (payloadlen % 2) {
     *ptr = 0;
-    ptr++;
     chksumlen++;
   }
 
-  return checksum ((uint16_t *) buf, chksumlen);
+  return checksum ((uint8_t *) buf, chksumlen);
 }
 
 // Allocate memory for an array of chars.
@@ -463,13 +466,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -484,13 +486,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");
@@ -505,13 +506,12 @@ allocate_intmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_intmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_intmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (int *) malloc (len * sizeof (int));
+  tmp = calloc (len, sizeof (int));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (int));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_intmem().\n");

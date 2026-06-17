@@ -1,4 +1,4 @@
-/*  Copyright (C) 2013-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2013-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 // routing protocol for low-power and lossy networks (RPL).
 // Need to have destination MAC address.
 
+#define __FAVOR_BSD           // Use BSD format of tcp header
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -31,11 +32,9 @@
 #include <netinet/in.h>       // IPPROTO_HOPOPTS, IPPROTO_TCP, IPPROTO_FRAGMENT, INET6_ADDRSTRLEN
 #include <netinet/ip.h>       // IP_MAXPACKET (which is 65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
-#define __FAVOR_BSD           // Use BSD format of tcp header
 #include <netinet/tcp.h>      // struct tcphdr
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl.
 #include <net/if.h>           // struct ifreq
 #include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
@@ -70,9 +69,10 @@ struct _route_hdr {
 #define MAX_HBHOPTIONS 10     // Maximum number of extension header options
 #define MAX_HBHOPTLEN 256     // Maximum length of a hop-by-hop option (some large value)
 #define MAX_ADDRESSES 255     // Maximum number of (full) addresses that can be used in type 3 routing header
+#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
-uint16_t checksum (uint16_t *, int);
+uint16_t checksum (uint8_t *, int);
 uint16_t tcp6_checksum (struct ip6_hdr, struct tcphdr, int, uint8_t *, uint8_t *, int);
 int option_pad (int *, uint8_t *, int *, int, int);
 char *allocate_strmem (int);
@@ -110,7 +110,7 @@ main (int argc, char **argv) {
   // Allocate memory for hop-by-hop extension header options.
   hbh_optlen = allocate_intmem (MAX_HBHOPTIONS);  // hbh_optlen[option #] = int
   hbh_options = allocate_ustrmemp (MAX_HBHOPTIONS);  // hbh_options[option #] = uint8_t *
-  for (i=0; i<MAX_HBHOPTIONS; i++) {
+  for (i = 0; i < MAX_HBHOPTIONS; i++) {
     hbh_options[i] = allocate_ustrmem (MAX_HBHOPTLEN);
   }
   hbh_x = allocate_intmem (MAX_HBHOPTIONS);  // Hop-by-hop option alignment requirement x (of xN + y): hbh_x[option #] = int
@@ -120,9 +120,9 @@ main (int argc, char **argv) {
   src_mac = allocate_ustrmem (6);
   dst_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (IP_MAXPACKET);
-  interface = allocate_strmem (40);
-  target = allocate_strmem (INET6_ADDRSTRLEN);
-  nexthop = allocate_strmem (INET6_ADDRSTRLEN);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  target = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
+  nexthop = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
   address = allocate_strmem (INET6_ADDRSTRLEN);
@@ -131,7 +131,7 @@ main (int argc, char **argv) {
   frag_flags = allocate_intmem (2);
 
   // Interface to send packet through.
-  strcpy (interface, "ens1");
+  strncpy (interface, "ens1", sizeof (ifr.ifr_name));
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -141,13 +141,16 @@ main (int argc, char **argv) {
 
   // Use ioctl() to get interface maximum transmission unit (MTU).
   memset (&ifr, 0, sizeof (ifr));
-  strcpy (ifr.ifr_name, interface);
+  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
+    fprintf (stderr, "Interface name too long.\n");
+    exit (EXIT_FAILURE);
+  }
   if (ioctl (sd, SIOCGIFMTU, &ifr) < 0) {
     perror ("ioctl() failed to get MTU ");
     return (EXIT_FAILURE);
   }
   mtu = ifr.ifr_mtu;
-  printf ("Current MTU of interface %s is: %i\n", interface, mtu);
+  fprintf (stdout, "Current MTU of interface %s is: %d\n", interface, mtu);
 
   // Use ioctl() to look up interface name and get its MAC address.
   memset (&ifr, 0, sizeof (ifr));
@@ -162,11 +165,10 @@ main (int argc, char **argv) {
   memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
 
   // Report source MAC address to stdout.
-  printf ("MAC address for interface %s is ", interface);
-  for (i=0; i<5; i++) {
-    printf ("%02x:", src_mac[i]);
+  fprintf (stdout, "MAC address for interface %s is ", interface);
+  for (i = 0; i < 6; i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
   }
-  printf ("%02x\n", src_mac[5]);
 
   // Find interface index from interface name and store index in
   // struct sockaddr_ll device, which will be used as an argument of sendto().
@@ -175,7 +177,7 @@ main (int argc, char **argv) {
     perror ("if_nametoindex() failed to obtain interface index ");
     exit (EXIT_FAILURE);
   }
-  printf ("Index for interface %s is %i\n", interface, device.sll_ifindex);
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
 
   // Set destination MAC address: you need to fill these out
   dst_mac[0] = 0xff;
@@ -186,17 +188,17 @@ main (int argc, char **argv) {
   dst_mac[5] = 0xff;
 
   // Source IPv6 address: you need to fill this out
-  strcpy (src_ip, "2001:db8::afcd:76aa:721:8da8");
+  strncpy (src_ip, "2001:db8::afcd:76aa:721:8da8", INET6_ADDRSTRLEN);
 
   // URL or IPv6 address of next hop: you need to fill this out
   // This will be used in IPv6 header as destination address.
   // See Section 3 of RFC 6554.
-  strcpy (nexthop, "2001:db8::214:51ff:fe2f:1556");
+  strncpy (nexthop, "2001:db8::214:51ff:fe2f:1556", TEXT_STRINGLEN);
 
   // Destination URL or IPv6 address: you need to fill this out
   // The IP address will be placed at end of routing list.
   // See Section 3 of RFC 6554.
-  strcpy (target, "ipv6.google.com");
+  strncpy (target, "ipv6.google.com", TEXT_STRINGLEN);
 
   // Number of hop-by-hop extension header options.
   hbh_nopt = 1;
@@ -215,7 +217,7 @@ main (int argc, char **argv) {
 
   // Calculate total length of hop-by-hop options.
   hbh_opt_totlen = 0;
-  for (i=0; i<hbh_nopt; i++) {
+  for (i = 0; i < hbh_nopt; i++) {
     hbh_opt_totlen += hbh_optlen[i];
   }
 
@@ -223,7 +225,7 @@ main (int argc, char **argv) {
   indx = 0;
   if (hbh_nopt > 0) {
     indx += HOP_HDRLEN; // Account for hop-by-hop header (Next Header and Header Length)
-    for (i=0; i<hbh_nopt; i++) {
+    for (i = 0; i < hbh_nopt; i++) {
       // Add any necessary alignment for option i
       while ((indx % hbh_x[i]) != hbh_y[i]) {
         indx++;
@@ -252,9 +254,9 @@ main (int argc, char **argv) {
   }
 
   // Print some information about hop-by-hop options.
-  printf ("Number of hop-by-hop options: %i\n", hbh_nopt);
-  printf ("Total length of hop-by-hop options, excluding 2-byte hop-by-hop header and padding: %i\n", hbh_opt_totlen);
-  printf ("Total length of hop-by-hop alignment padding and end-padding: %i\n", hbh_optpadlen);
+  fprintf (stdout, "Number of hop-by-hop options: %d\n", hbh_nopt);
+  fprintf (stdout, "Total length of hop-by-hop options, excluding 2-byte hop-by-hop header and padding: %d\n", hbh_opt_totlen);
+  fprintf (stdout, "Total length of hop-by-hop alignment padding and end-padding: %d\n", hbh_optpadlen);
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -273,7 +275,7 @@ main (int argc, char **argv) {
   // Now add the routing addresses. We'll put three, just as an example.
   // First SRH address (second hop; IPv6 header has first hop): you need to fill this out
   memset (&sa, 0, sizeof (sa));
-  strcpy (address, "2001:db8::2de:24c:88e2:aa5");
+  strncpy (address, "2001:db8::2de:24c:88e2:aa5", INET6_ADDRSTRLEN);
   if ((status = inet_pton (AF_INET6, address, &sa.sin6_addr)) != 1) {
     fprintf (stderr, "inet_pton() failed for first SRH address (2nd hop).\nError message: %s", strerror (status));
     return (EXIT_FAILURE);
@@ -283,7 +285,7 @@ main (int argc, char **argv) {
   c += sizeof (sa.sin6_addr);
 
   // Second SRH address: you need to fill this out
-  strcpy (address, "2001:db8::23e:7dd3:529:7cc2");
+  strncpy (address, "2001:db8::23e:7dd3:529:7cc2", INET6_ADDRSTRLEN);
   if ((status = inet_pton (AF_INET6, address, &sa.sin6_addr)) != 1) {
     fprintf (stderr, "inet_pton() failed for second SRH address (3rd hop).\nError message: %s", strerror (status));
     return (EXIT_FAILURE);
@@ -328,7 +330,7 @@ main (int argc, char **argv) {
   i = 0;
   fi = fopen ("data", "r");
   if (fi == NULL) {
-    printf ("Can't open file 'data'.\n");
+    fprintf (stderr, "Can't open file 'data'.\n");
     exit (EXIT_FAILURE);
   }
   while ((n=fgetc (fi)) != EOF) {
@@ -337,12 +339,12 @@ main (int argc, char **argv) {
   }
   fclose (fi);
   payloadlen = i;
-  printf ("Upper layer protocol header length (bytes): %i\n", TCP_HDRLEN);
-  printf ("Payload length (bytes): %i\n", payloadlen);
+  fprintf (stdout, "Upper layer protocol header length (bytes): %d\n", TCP_HDRLEN);
+  fprintf (stdout, "Payload length (bytes): %d\n", payloadlen);
 
   // Length of fragmentable portion of packet.
   fragbufferlen = TCP_HDRLEN + payloadlen;
-  printf ("Total fragmentable data (bytes): %i\n", fragbufferlen);
+  fprintf (stdout, "Total fragmentable data (bytes): %d\n", fragbufferlen);
 
   // Allocate memory for the fragmentable portion.
   fragbuffer = allocate_ustrmem (fragbufferlen);
@@ -379,12 +381,12 @@ main (int argc, char **argv) {
         c--;
       }
     }
-    printf ("Frag: %i,  Data (bytes): %i,  Data Offset (8-byte blocks): %i\n", i, len[i], offset[i]);
+    fprintf (stdout, "Frag: %d,  Data (bytes): %d,  Data Offset (8-byte blocks): %d\n", i, len[i], offset[i]);
     i++;
     offset[i] = (len[i-1] / 8) + offset[i-1];
   }
   nframes = i;
-  printf ("Total number of frames to send: %i\n", nframes);
+  fprintf (stdout, "Total number of frames to send: %d\n", nframes);
 
   // IPv6 header
 
@@ -465,7 +467,7 @@ main (int argc, char **argv) {
   tcp_flags[7] = 0;
 
   tcphdr.th_flags = 0;
-  for (i=0; i<8; i++) {
+  for (i = 0; i < 8; i++) {
     tcphdr.th_flags += (tcp_flags[i] << i);
   }
 
@@ -501,7 +503,7 @@ main (int argc, char **argv) {
   }
 
   // Loop through fragments.
-  for (i=0; i<nframes; i++) {
+  for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
     memset (ether_frame, 0, IP_MAXPACKET * sizeof (uint8_t));
@@ -545,7 +547,7 @@ main (int argc, char **argv) {
       indx += HOP_HDRLEN;
 
       // Copy hop-by_hop extension header options to ethernet frame.
-      for (j=0; j<hbh_nopt; j++) {
+      for (j = 0; j < hbh_nopt; j++) {
         // Pad as needed to achieve alignment requirements for option j (Section 4.2 of RFC 2460).
         option_pad (&indx, ether_frame, &c, hbh_x[j], hbh_y[j]);
 
@@ -591,7 +593,7 @@ main (int argc, char **argv) {
     frame_length = c;
 
     // Send ethernet frame to socket.
-    printf ("Sending fragment: %i\n", i);
+    fprintf (stdout, "Sending fragment: %d\n", i);
     if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
       perror ("sendto() failed");
       exit (EXIT_FAILURE);
@@ -616,7 +618,7 @@ main (int argc, char **argv) {
   free (frag_flags);
   free (fragbuffer);
   free (hbh_optlen);
-  for (i=0; i<MAX_HBHOPTIONS; i++) {
+  for (i = 0; i < MAX_HBHOPTIONS; i++) {
     free (hbh_options[i]);
   }
   free (hbh_options);
@@ -630,21 +632,23 @@ main (int argc, char **argv) {
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum is not guaranteed to preclude collisions.
 uint16_t
-checksum (uint16_t *addr, int len) {
+checksum (uint8_t *addr, int len) {
 
   int count = len;
-  register uint32_t sum = 0;
+  uint32_t sum = 0;
   uint16_t answer = 0;
 
   // Sum up 2-byte values until none or only one byte left.
   while (count > 1) {
-    sum += *(addr++);
+    sum += ((uint16_t) addr[0] << 8) + addr[1];
+    addr += 2;
     count -= 2;
   }
 
-  // Add left-over byte, if any.
+  // Add left-over byte, if any. For an odd-length buffer, the
+  // remaining byte is the high-order byte of the final 16-bit word.
   if (count > 0) {
-    sum += *(uint8_t *) addr;
+    sum += ((uint16_t) addr[0] << 8);
   }
 
   // Fold 32-bit sum into 16 bits; we lose information by doing this,
@@ -654,10 +658,11 @@ checksum (uint16_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum.
+  // Checksum is one's compliment of sum. Return it in network byte order
+  // so it can be copied directly into the packet header.
   answer = ~sum;
 
-  return (answer);
+  return (htons (answer));
 }
 
 // Build IPv6 TCP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
@@ -667,7 +672,7 @@ tcp6_checksum (struct ip6_hdr iphdr, struct tcphdr tcphdr, int segs_left, uint8_
   uint32_t lvalue;
   uint8_t buf[IP_MAXPACKET], cvalue;
   uint8_t *ptr;
-  int i, offset, chksumlen = 0;
+  int offset, chksumlen = 0;
 
   memset (buf, 0, IP_MAXPACKET * sizeof (uint8_t));
 
@@ -759,14 +764,12 @@ tcp6_checksum (struct ip6_hdr iphdr, struct tcphdr tcphdr, int segs_left, uint8_
   chksumlen += payloadlen;
 
   // Pad to the next 16-bit boundary
-  i = 0;
-  while (((payloadlen+i)%2) != 0) {
-    i++;
+  if (payloadlen % 2) {
+    *ptr = 0;
     chksumlen++;
-    ptr++;
   }
 
-  return checksum ((uint16_t *) buf, chksumlen);
+  return checksum ((uint8_t *) buf, chksumlen);
 }
 
 // Provide padding as needed to achieve alignment requirements of hop-by-hop or destination option.
@@ -812,13 +815,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -833,13 +835,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");
@@ -854,13 +855,12 @@ allocate_ustrmemp (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmemp().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmemp().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t **) malloc (len * sizeof (uint8_t *));
+  tmp = calloc (len, sizeof (uint8_t *));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t *));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmemp().\n");
@@ -875,13 +875,12 @@ allocate_intmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_intmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_intmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (int *) malloc (len * sizeof (int));
+  tmp = calloc (len, sizeof (int));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (int));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_intmem().\n");

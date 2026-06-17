@@ -6,9 +6,8 @@ Additionally, I have included some router solicitation and advertisement routine
 
 | File | Description |
 | :--- | :--- |
-| arp.c | Send an ARP request ethernet frame. |
-| receive_arp.c | Receive an ARP reply ethernet frame. |
-| rs4.c | Send a router solicitation. |
-| ra4.c | Send a router advertisement. |
-| receive_ra4.c | Receive a router advertisement. |
-| tr4_ll.c | TCP/ICMP/UDP traceroute |
+| arp.c | Send an ARP request and receive an ARP replay via ethernet frame. `sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ARP));` |
+| rs4.c | Send a router solicitation. `sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);` |
+| ra4.c | Send a router advertisement. `sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW);` |
+| receive_ra4.c | Receive a router advertisement. `sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_IP));` |
+| tr4_ll.c | TCP/ICMP/UDP traceroute. `sendsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));`, `recsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_IP));` |

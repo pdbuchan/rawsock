@@ -2,6 +2,8 @@
 
 These examples include various combinations of IP and TCP options.
 
+    `sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL));`
+
 | File | Description |
 | :--- | :--- |
 | tcp4_maxseg.c | Send TCP packet with a TCP option which sets maximum segment size. |

@@ -2,8 +2,8 @@
 
 In these examples, we fill out all values, but only including the *destination* (i.e., next-hop) Layer 2 (data link) information (not source MAC address). This is called a "cooked packet." To do this, we must know the MAC address of the router/host the frames will be routed to next (Note 1).
 
-    sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL));
-	
+    'sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IP));'
+
 We provide a "cooked" packet with destination MAC address in struct sockaddr_ll.
 
 | File | Description |

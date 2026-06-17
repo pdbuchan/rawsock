@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2011-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,16 +20,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // strcpy, memset()
+#include <string.h>           // memset(), and memcpy()
+#include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_IP, IPPROTO_ICMP, INET_ADDRSTRLEN
 #include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
 #include <arpa/inet.h>        // inet_ntop()
-#include <sys/types.h>        // needed for socket(), uint8_t, uint16_t
 #include <sys/socket.h>       // needed for socket()
+#include <poll.h>             // poll()
+#include <time.h>             // clock_gettime()
 #include <netinet/ip_icmp.h>  // ICMP_ROUTERADVERT
-#include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_ALL = 0x0003
-#include <net/ethernet.h>
+#include <linux/if_ether.h>   // ETH_HLEN, ETH_P_IP, ETH_P_ALL
 
 #include <errno.h>            // errno, perror()
 
@@ -46,29 +47,35 @@ struct _ra_hdr {
 };
 
 // Define some constants.
-#define IP4_HDRLEN 20         // IPv4 header length
-#define ICMP_HDRLEN 8         // IPv4 ICMP header length excluding data
+#define ETH_HDRLEN ETH_HLEN  // Ethernet header length
+#define IP4_HDRLEN 20        // IPv4 header length
+#define ICMP_HDRLEN 8        // IPv4 ICMP header length excluding data
+#define TIMEOUT 60000        // Request timeout in milliseconds
 
 // Function prototypes
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
 int
-main (int argc, char **argv) {
+main (void) {
 
-  int i, offset, sd, status;
+  int i, offset, sd, status, iphdrlen, ip_total_len, naddrs, entry_size, timeout;
+  ssize_t bytes;
+  uint32_t preference;
+  struct timespec start, now;
+  struct pollfd pfd;
   uint8_t *ether_frame;
   struct ip *iphdr;
   ra_hdr *rahdr;
   char *src_ip, *dst_ip;
 
   // Allocate memory for various arrays.
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
+  ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
 
   // Submit request for a raw socket descriptor.
-  if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
+  if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_IP))) < 0) {
     perror ("socket() failed ");
     exit (EXIT_FAILURE);
   }
@@ -78,68 +85,153 @@ main (int argc, char **argv) {
   //     MAC (6 bytes) + MAC (6 bytes) + ethernet type (2 bytes)
   //     + ethernet data (IPv4 header + RA header)
   // Keep at it until we get a router advertisement.
-  iphdr = (struct ip *) (ether_frame + 6 + 6 +2);
-  rahdr = (ra_hdr *) (ether_frame + 6 + 6 + 2 + IP4_HDRLEN);
-  while (((((ether_frame[12]) << 8) + ether_frame[13]) != ETH_P_IP) || (iphdr->ip_p != IPPROTO_ICMP) ||
-         (rahdr->icmp_type != ICMP_ROUTERADVERT)) {
-    if ((status = recv (sd, ether_frame, IP_MAXPACKET, 0)) < 0) {
+  pfd.fd = sd;
+  pfd.events = POLLIN;
+  if (clock_gettime (CLOCK_MONOTONIC, &start) < 0) {
+    status = errno;
+    fprintf (stderr, "clock_gettime() failed.\nError message: %s\n", strerror (status));
+    exit (EXIT_FAILURE);
+  }
+  for (;;) {
+    if (clock_gettime (CLOCK_MONOTONIC, &now) < 0) {
+      status = errno;
+      fprintf (stderr, "clock_gettime() failed.\nError message: %s\n", strerror (status));
+      exit (EXIT_FAILURE);
+    }
+    timeout = TIMEOUT - (int) (((now.tv_sec - start.tv_sec) * 1000) + ((now.tv_nsec - start.tv_nsec) / 1000000));
+    if (timeout <= 0) {
+      fprintf (stderr, "No router advertisement within %d milliseconds.\n", TIMEOUT);
+      exit (EXIT_FAILURE);
+    }
+    status = poll (&pfd, 1, timeout);
+    if (status < 0) {
       if (errno == EINTR) {
-        memset (ether_frame, 0, IP_MAXPACKET * sizeof (uint8_t));
         continue;  // Something weird happened, but let's try again.
       } else {
-        perror ("recv() failed:");
+        fprintf (stderr, "poll() failed.\nError message: %s\n", strerror (errno));
         exit (EXIT_FAILURE);
       }
+    }
+    if (status == 0) {
+      fprintf (stderr, "No router advertisement within %d milliseconds.\n", TIMEOUT);
+      exit (EXIT_FAILURE);
+    }
+    if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      fprintf (stderr, "poll() returned an error event: %hd\n", pfd.revents);
+      exit (EXIT_FAILURE);
+    }
+
+    // If pfd has POLLIN set in revents, then sd (i.e., pfd.fd) is ready for reading.
+    if (pfd.revents & POLLIN) {
+      memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+      if ((bytes = recv (sd, ether_frame, ETH_HDRLEN + IP_MAXPACKET, 0)) < 0) {
+        if (errno == EINTR) {
+          continue;  // Something weird happened, but let's try again.
+        } else {
+          perror ("recv() failed:");
+          exit (EXIT_FAILURE);
+        }
+      }
+
+      // Check for sufficient bytes to parse ethernet, IP, and ICMP headers.
+      if (bytes < (ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN)) {
+        continue;
+      }
+      if ((((ether_frame[12]) << 8) + ether_frame[13]) != ETH_P_IP) {
+        continue;
+      }
+      iphdr = (struct ip *) (ether_frame + ETH_HDRLEN);
+
+      // Ensure IP header length reported by IP header is consistent with bytes received.
+      iphdrlen = iphdr->ip_hl * 4;
+      if ((iphdrlen < IP4_HDRLEN) || (bytes < (ETH_HDRLEN + iphdrlen + ICMP_HDRLEN))) {
+        continue;
+      }
+
+      // Ensure IPv4 total length is consistent with received bytes and large enough
+      // to contain IPv4 header and ICMP router advertisement header.
+      ip_total_len = ntohs (iphdr->ip_len);
+      if ((ip_total_len < (iphdrlen + ICMP_HDRLEN)) ||
+          (bytes < (ETH_HDRLEN + ip_total_len))) {
+        continue;
+      }
+
+      // Ensure we have an ICMP packet.
+      if (iphdr->ip_p != IPPROTO_ICMP) {
+        continue;
+      }
+
+      // Ensure we have a router advertisement.
+      rahdr = (ra_hdr *) (ether_frame + ETH_HDRLEN + iphdrlen);
+      if (rahdr->icmp_type != ICMP_ROUTERADVERT) {
+        continue;
+      }
+      if (rahdr->icmp_code != 0) {
+        continue;
+      }
+
+      // Ensure valid router address entry size (units of 32-bit words).
+      if (rahdr->entry_size < 2) {
+        continue;
+      }
+
+      // Ensure IPv4 total length and received bytes are consistent with number of
+      // addresses the RA header claims.
+      if ((ip_total_len < (iphdrlen + ICMP_HDRLEN + (rahdr->num_addrs * rahdr->entry_size * 4))) ||
+          (bytes < (ETH_HDRLEN + ip_total_len))) {
+        continue;
+      }
+      break;
     }
   }
   close (sd);
 
   // Print out contents of received ethernet frame.
-  printf ("\nEthernet frame header:\n");
-  printf ("Destination MAC (this node): ");
-  for (i=0; i<5; i++) {
-    printf ("%02x:", ether_frame[i]);
+  fprintf (stdout, "\nRECEIVED ETHERNET FRAME\n");
+  fprintf (stdout, "  Ethernet frame header:\n");
+  fprintf (stdout, "    Destination MAC address (this node): ");
+  for (i = 0; i < 6; i++) {
+    fprintf (stdout, "%02x%s", ether_frame[i], (i < 5) ? ":" : "\n");
   }
-  printf ("%02x\n", ether_frame[5]);
-  printf ("Source MAC: ");
-  for (i=0; i<5; i++) {
-    printf ("%02x:", ether_frame[i+6]);
+  fprintf (stdout, "    Source MAC address: ");
+  for (i = 0; i < 6; i++) {
+    fprintf (stdout, "%02x%s", ether_frame[i + 6], (i < 5) ? ":" : "\n");
   }
-  printf ("%02x\n", ether_frame[11]);
   // Next is ethernet type code (ETH_P_IP for IPv4 packets).
   // http://www.iana.org/assignments/ethernet-numbers
-  printf ("Ethernet type code (2048 = IPv4): %u\n", ((ether_frame[12]) << 8) + ether_frame[13]);
-  printf ("\nEthernet data (IPv4 header + Router Advertisement header)\n");
-  printf ("IPv4 transport layer protocol (1 = ICMP): %u\n", iphdr->ip_p);
+  fprintf (stdout, "  Ethernet type code (2048 = IPv4): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
+
+  fprintf (stdout, "  Router Advertisement header\n");
+  fprintf (stdout, "    IPv4 transport layer protocol (1 = ICMP): %u\n", iphdr->ip_p);
   if (inet_ntop (AF_INET, &(iphdr->ip_src), src_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s", strerror (status));
     exit (EXIT_FAILURE);
   }
-  printf ("Source IPv4 address: %s\n", src_ip);
+  fprintf (stdout, "    Source IPv4 address: %s\n", src_ip);
   if (inet_ntop (AF_INET, &(iphdr->ip_dst), dst_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for received destination address.\nError message: %s", strerror (status));
     exit (EXIT_FAILURE);
   }
-  printf ("Destination IPv4 address: %s\n", dst_ip);
-  printf ("ICMP message type (9 = router advertisement): %u\n", rahdr->icmp_type);
-  printf ("ICMP message code: %u\n", rahdr->icmp_code);
-  printf ("Number of IPv4 addresses associated with router: %u\n", rahdr->num_addrs);
-  printf ("Router address entry size (in units of 32 bit words): %u\n", rahdr->entry_size);
-  printf ("Lifetime of validity of router advertisement (seconds): %u\n", ntohs (rahdr->lifetime));
-  offset = 6 + 6 + 2 + IP4_HDRLEN + ICMP_HDRLEN;  // Start of list of addresses and preference levels within ethernet frame
-  for (i=0; i<rahdr->num_addrs; i++) {
-    printf ("Router %i IPv4 address: %u:%u:%u:%u\n", 
-     i, ether_frame[offset + (i * rahdr->entry_size * 4) + 0],
-        ether_frame[offset + (i * rahdr->entry_size * 4) + 1],
-        ether_frame[offset + (i * rahdr->entry_size * 4) + 2],
-        ether_frame[offset + (i * rahdr->entry_size * 4) + 3]);
-    printf ("Router %i preference level: %u\n", i,  ((ether_frame[offset + (i * rahdr->entry_size * 4) + 4]) << 24) +
-     ((ether_frame[offset + (i * rahdr->entry_size * 4) + 5]) << 16) +
-     ((ether_frame[offset + (i * rahdr->entry_size * 4) + 6]) << 8) +
-     ether_frame[offset + (i * rahdr->entry_size * 4) + 7]);
-    offset += rahdr->entry_size * 4;
+  fprintf (stdout, "    Destination IPv4 address: %s\n", dst_ip);
+  fprintf (stdout, "    ICMP message type (9 = router advertisement): %u\n", rahdr->icmp_type);
+  fprintf (stdout, "    ICMP message code: %u\n", rahdr->icmp_code);
+  fprintf (stdout, "    Router address entry size (in units of 32-bit words): %u\n", rahdr->entry_size);
+  fprintf (stdout, "    Lifetime of validity of router advertisement (seconds): %u\n", ntohs (rahdr->lifetime));
+  fprintf (stdout, "    Number of IPv4 addresses associated with router: %u\n", rahdr->num_addrs);
+  offset = ETH_HDRLEN + iphdrlen + ICMP_HDRLEN;  // Start of list of addresses and preference levels within ethernet frame
+  naddrs = rahdr->num_addrs;
+  entry_size = rahdr->entry_size * 4;
+  for (i = 0; i < naddrs; i++) {
+    fprintf (stdout, "      Router %d IPv4 address: %u.%u.%u.%u\n",
+     i, ether_frame[offset + 0],
+        ether_frame[offset + 1],
+        ether_frame[offset + 2],
+        ether_frame[offset + 3]);
+    memcpy (&preference, ether_frame + offset + 4, sizeof (preference));
+    fprintf (stdout, "      Router %d preference level: %d\n", i, (int32_t) ntohl (preference));
+    offset += entry_size;
   }
 
   free (ether_frame);
@@ -156,13 +248,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -177,13 +268,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");

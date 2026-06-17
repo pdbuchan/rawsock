@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2011-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,7 +29,6 @@
 #include <netinet/icmp6.h>    // struct icmp6_hdr, ICMP6_ECHO_REQUEST
 #include <netdb.h>            // struct addrinfo
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl.
 #include <net/if.h>           // struct ifreq
 
 #include <errno.h>            // errno, perror()
@@ -43,9 +42,10 @@ struct in6_pktinfo {
 // Define some constants.
 #define IP6_HDRLEN 40         // IPv6 header length
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
+#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
-uint16_t checksum (uint16_t *, int);
+uint16_t checksum (uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
@@ -66,15 +66,15 @@ main (int argc, char **argv) {
   struct iovec iov[2];
 
   // Allocate memory for various arrays.
-  source = allocate_strmem (40);
-  target = allocate_strmem (40);
-  interface = allocate_strmem (40);
+  source = allocate_strmem (INET6_ADDRSTRLEN);
+  target = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
   data = allocate_ustrmem (IP_MAXPACKET);
   outpack = allocate_ustrmem (IP_MAXPACKET);
   psdhdr = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send packet through.
-  strcpy (interface, "eno1");
+  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET6, SOCK_RAW, IPPROTO_IPV6)) < 0) {
@@ -86,19 +86,22 @@ main (int argc, char **argv) {
   // bind socket descriptor sd to specified interface with setsockopt() since
   // none of the other arguments of sendto() specify which interface to use.
   memset (&ifr, 0, sizeof (ifr));
-  snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
+  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
+    fprintf (stderr, "Interface name too long.\n");
+    exit (EXIT_FAILURE);
+  }
   if (ioctl (sd, SIOCGIFINDEX, &ifr) < 0) {
     perror ("ioctl() failed to find interface ");
     return (EXIT_FAILURE);
   }
   close (sd);
-  printf ("Index for interface %s is %i\n", interface, ifr.ifr_ifindex);
+  fprintf (stdout, "Index for interface %s is %d\n", interface, ifr.ifr_ifindex);
 
   // Source IPv6 address: you need to fill this out
-  strcpy (source, "2001:db8::214:51ff:fe2f:1556");
+  strncpy (source, "2001:db8::214:51ff:fe2f:1556", INET6_ADDRSTRLEN);
 
   // Destination URL or IPv6 address: you need to fill this out
-  strcpy (target, "ipv6.google.com");
+  strncpy (target, "ipv6.google.com", TEXT_STRINGLEN);
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -199,9 +202,9 @@ main (int argc, char **argv) {
   psdhdr[38] = 0;  // Must be zero
   psdhdr[39] = IPPROTO_ICMPV6;
   memcpy (psdhdr + 40, outpack, (ICMP_HDRLEN + datalen) * sizeof (uint8_t));
-  icmphdr->icmp6_cksum = checksum ((uint16_t *) psdhdr, psdhdrlen);
+  icmphdr->icmp6_cksum = checksum ((uint8_t *) psdhdr, psdhdrlen);
 
-  printf ("Checksum: %x\n", ntohs (icmphdr->icmp6_cksum));
+  fprintf (stdout, "Checksum: %x\n", ntohs (icmphdr->icmp6_cksum));
 
   // Request a socket descriptor sd.
   if ((sd = socket (AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0) {
@@ -237,21 +240,23 @@ main (int argc, char **argv) {
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum is not guaranteed to preclude collisions.
 uint16_t
-checksum (uint16_t *addr, int len) {
+checksum (uint8_t *addr, int len) {
 
   int count = len;
-  register uint32_t sum = 0;
+  uint32_t sum = 0;
   uint16_t answer = 0;
 
   // Sum up 2-byte values until none or only one byte left.
   while (count > 1) {
-    sum += *(addr++);
+    sum += ((uint16_t) addr[0] << 8) + addr[1];
+    addr += 2;
     count -= 2;
   }
 
-  // Add left-over byte, if any.
+  // Add left-over byte, if any. For an odd-length buffer, the
+  // remaining byte is the high-order byte of the final 16-bit word.
   if (count > 0) {
-    sum += *(uint8_t *) addr;
+    sum += ((uint16_t) addr[0] << 8);
   }
 
   // Fold 32-bit sum into 16 bits; we lose information by doing this,
@@ -261,10 +266,11 @@ checksum (uint16_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum.
+  // Checksum is one's compliment of sum. Return it in network byte order
+  // so it can be copied directly into the packet header.
   answer = ~sum;
 
-  return (answer);
+  return (htons (answer));
 }
 
 // Allocate memory for an array of chars.
@@ -274,13 +280,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -295,13 +300,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");

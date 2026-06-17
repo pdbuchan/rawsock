@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2011-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,9 +28,11 @@
 #include <netinet/ip.h>       // IP_MAXPACKET (65535)
 #include <netdb.h>            // struct addrinfo
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl. Here, we need SIOCGIFHWADDR
 #include <bits/socket.h>      // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
+
+// Define some constants.
+#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Definition of pktinfo6 created from definition of in6_pktinfo in netinet/in.h.
 // This should remove "redefinition of in6_pktinfo" errors in some linux variants.
@@ -41,7 +43,7 @@ struct _pktinfo6 {
 };
 
 // Function prototypes
-uint16_t checksum (uint16_t *, int);
+uint16_t checksum (uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
@@ -65,25 +67,25 @@ main (int argc, char **argv) {
   char *target, *source, *interface;
 
   // Allocate memory for various arrays.
-  interface = allocate_strmem (40);
-  target = allocate_strmem (40);
-  source = allocate_strmem (40);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  target = allocate_strmem (INET6_ADDRSTRLEN);
+  source = allocate_strmem (INET6_ADDRSTRLEN);
   outpack = allocate_ustrmem (IP_MAXPACKET);
   options = allocate_ustrmem (optlen);
   psdhdr = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send packet through.
-  strcpy (interface, "eno1");
+  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
 
   // Source (node sending advertisement) IPv6 link-local address: you need to fill this out
-  strcpy (source, "fe80::");
+  strncpy (source, "fe80::", INET6_ADDRSTRLEN);
 
   // Destination IPv6 address either:
   // 1) unicast address of node which sent solicitation, or if the
   // solicitation came from the unspecified address (::), use the
   // 2) IPv6 "all nodes" link-local multicast address (ff02::1).
   // You need to fill this out.
-  strcpy (target, "ff02::1");
+  strncpy (target, "ff02::1", INET6_ADDRSTRLEN);
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -119,7 +121,10 @@ main (int argc, char **argv) {
 
   // Use ioctl() to look up advertising node's (i.e., source's) interface name and get its MAC address.
   memset (&ifr, 0, sizeof (ifr));
-  snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
+  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
+    fprintf (stderr, "Interface name too long.\n");
+    exit (EXIT_FAILURE);
+  }
   if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
     perror ("ioctl() failed to get MAC address of advertising node ");
     return (EXIT_FAILURE);
@@ -128,16 +133,15 @@ main (int argc, char **argv) {
   // Copy advertising MAC address into options buffer.
   options[0] = 2;           // Option Type - "target link layer address" (Section 4.6 of RFC 4861)
   options[1] = optlen / 8;  // Option Length - units of 8 octets (RFC 4861)
-  for (i=0; i<6; i++) {
-    options[i+2] = (uint8_t) ifr.ifr_addr.sa_data[i];
+  for (i = 0; i < 6; i++) {
+    options[i + 2] = (uint8_t) ifr.ifr_addr.sa_data[i];
   }
 
   // Report advertising node MAC address to stdout.
-  printf ("Advertising node's MAC address for interface %s is ", interface);
-  for (i=0; i<5; i++) {
-    printf ("%02x:", options[i+2]);
+  fprintf (stdout, "Advertising node's MAC address for interface %s is ", interface);
+  for (i = 0; i < 6; i++) {
+    fprintf (stdout, "%02x%s", options[i + 2], (i < 5) ? ":" : "\n");
   }
-  printf ("%02x\n", options[5+2]);
 
   // Find interface index from interface name.
   // This will be put in cmsghdr data in order to specify the interface we want to use.
@@ -145,7 +149,7 @@ main (int argc, char **argv) {
     perror ("if_nametoindex() failed to obtain interface index ");
     exit (EXIT_FAILURE);
   }
-  printf ("Advertising node's index for interface %s is %i\n", interface, ifindex);
+  fprintf (stdout,"Advertising node's index for interface %s is %d\n", interface, ifindex);
 
   // Define first part of buffer outpack to be a neighbor advertisement struct.
   na = (struct nd_neighbor_advert *) outpack;
@@ -212,9 +216,9 @@ main (int argc, char **argv) {
   psdhdr[38] = 0;  // Must be zero
   psdhdr[39] = IPPROTO_ICMPV6;
   memcpy (psdhdr + 40, outpack, (NA_HDRLEN + optlen) * sizeof (uint8_t));
-  na->nd_na_hdr.icmp6_cksum = checksum ((uint16_t *) psdhdr, psdhdrlen);
+  na->nd_na_hdr.icmp6_cksum = checksum ((uint8_t *) psdhdr, psdhdrlen);
 
-  printf ("Checksum: %x\n", ntohs (na->nd_na_hdr.icmp6_cksum));
+  fprintf (stdout, "Checksum: %x\n", ntohs (na->nd_na_hdr.icmp6_cksum));
 
   // Send packet.
   if (sendmsg (sd, &msghdr, 0) < 0) {
@@ -238,21 +242,23 @@ main (int argc, char **argv) {
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum is not guaranteed to preclude collisions.
 uint16_t
-checksum (uint16_t *addr, int len) {
+checksum (uint8_t *addr, int len) {
 
   int count = len;
-  register uint32_t sum = 0;
+  uint32_t sum = 0;
   uint16_t answer = 0;
 
   // Sum up 2-byte values until none or only one byte left.
   while (count > 1) {
-    sum += *(addr++);
+    sum += ((uint16_t) addr[0] << 8) + addr[1];
+    addr += 2;
     count -= 2;
   }
 
-  // Add left-over byte, if any.
+  // Add left-over byte, if any. For an odd-length buffer, the
+  // remaining byte is the high-order byte of the final 16-bit word.
   if (count > 0) {
-    sum += *(uint8_t *) addr;
+    sum += ((uint16_t) addr[0] << 8);
   }
 
   // Fold 32-bit sum into 16 bits; we lose information by doing this,
@@ -262,10 +268,11 @@ checksum (uint16_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum.
+  // Checksum is one's compliment of sum. Return it in network byte order
+  // so it can be copied directly into the packet header.
   answer = ~sum;
 
-  return (answer);
+  return (htons (answer));
 }
 
 // Allocate memory for an array of chars.
@@ -275,13 +282,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -296,13 +302,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");

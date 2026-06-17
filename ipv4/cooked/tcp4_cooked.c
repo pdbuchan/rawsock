@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2011-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,114 +18,83 @@
 // Need to specify destination MAC address.
 // Values set for SYN packet, no TCP options data.
 
+#define __FAVOR_BSD           // Use BSD format of tcp header
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // strcpy, memset(), and memcpy()
+#include <string.h>           // memset(), and memcpy()
+#include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/types.h>        // needed for socket(), uint8_t, uint16_t, uint32_t
 #include <sys/socket.h>       // needed for socket()
-#include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_TCP, INET_ADDRSTRLEN
+#include <netinet/in.h>       // IPPROTO_TCP, INET_ADDRSTRLEN
 #include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
-#define __FAVOR_BSD           // Use BSD format of tcp header
 #include <netinet/tcp.h>      // struct tcphdr
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
-#include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl.
 #include <net/if.h>           // struct ifreq
-#include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
+#include <linux/if_ether.h>   // ETH_P_IP
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
-#include <net/ethernet.h>
+#include <time.h>             // time()
 
 #include <errno.h>            // errno, perror()
 
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
+#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
-uint16_t checksum (uint16_t *addr, int len);
-uint16_t tcp4_checksum (struct ip, struct tcphdr);
+uint16_t checksum (uint8_t *, int);
+uint16_t tcp4_checksum (struct ip, struct tcphdr, uint8_t *, int, uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
-int *allocate_intmem (int);
 
 int
-main (int argc, char **argv) {
+main (void) {
 
-  int i, status, frame_length, sd, bytes, *ip_flags, *tcp_flags;
+  int i, status, datagram_length, sd, ip_flags[4] = {0}, tcp_flags[8] = {0};
+  ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct tcphdr tcphdr;
-  uint8_t *src_mac, *dst_mac, *ether_frame;
+  uint8_t *dst_mac, *datagram;
+  uint32_t seq;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device;
   struct ifreq ifr;
   void *tmp;
 
+  memset (&iphdr, 0, sizeof (iphdr));
+  memset (&tcphdr, 0, sizeof (tcphdr));
+
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
   dst_mac = allocate_ustrmem (6);
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
-  interface = allocate_strmem (40);
-  target = allocate_strmem (40);
+  datagram = allocate_ustrmem (IP_MAXPACKET);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
-  ip_flags = allocate_intmem (4);
-  tcp_flags = allocate_intmem (8);
 
-  // Interface to send packet through.
-  strcpy (interface, "eno1");
+  // Random number seed
+  srand ((unsigned) time (NULL));
 
-  // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
-    perror ("socket() failed to get socket descriptor for using ioctl() ");
-    exit (EXIT_FAILURE);
-  }
-
-  // Use ioctl() to look up interface name and get its MAC address.
-  memset (&ifr, 0, sizeof (ifr));
-  snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
-  if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
-    perror ("ioctl() failed to get source MAC address ");
-    return (EXIT_FAILURE);
-  }
-  close (sd);
-
-  // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
-
-  // Report source MAC address to stdout.
-  printf ("MAC address for interface %s is ", interface);
-  for (i=0; i<5; i++) {
-    printf ("%02x:", src_mac[i]);
-  }
-  printf ("%02x\n", src_mac[5]);
-
-  // Find interface index from interface name and store index in
-  // struct sockaddr_ll device, which will be used as an argument of sendto().
-  memset (&device, 0, sizeof (device));
-  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
-    perror ("if_nametoindex() failed to obtain interface index ");
-    exit (EXIT_FAILURE);
-  }
-  printf ("Index for interface %s is %i\n", interface, device.sll_ifindex);
+  // Interface to send datagram through.
+  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
   // Set destination MAC address: you need to fill this out
-  dst_mac[0] = 0xff;
-  dst_mac[1] = 0xff;
-  dst_mac[2] = 0xff;
-  dst_mac[3] = 0xff;
-  dst_mac[4] = 0xff;
-  dst_mac[5] = 0xff;
+  dst_mac[0] = 0x0c;
+  dst_mac[1] = 0x9d;
+  dst_mac[2] = 0x92;
+  dst_mac[3] = 0x02;
+  dst_mac[4] = 0x58;
+  dst_mac[5] = 0x58;
 
   // Source IPv4 address: you need to fill this out
-  strcpy (src_ip, "192.168.0.240");
+  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
   // Destination URL or IPv4 address: you need to fill this out
-  strcpy (target, "www.google.com");
+  snprintf (target, TEXT_STRINGLEN, "%s", "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -135,22 +104,29 @@ main (int argc, char **argv) {
 
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
-    fprintf (stderr, "getaddrinfo() failed for target: %s\n", gai_strerror (status));
+    fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
   ipv4 = (struct sockaddr_in *) res->ai_addr;
   tmp = &(ipv4->sin_addr);
   if (inet_ntop (AF_INET, tmp, dst_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
-    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s", strerror (status));
+    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
   freeaddrinfo (res);
 
-  // Fill out sockaddr_ll.
+  // Fill out device's sockaddr_ll struct.
+  memset (&device, 0, sizeof (device));
   device.sll_family = AF_PACKET;
   device.sll_protocol = htons (ETH_P_IP);
-  memcpy (device.sll_addr, dst_mac, 6);
+  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
+    status = errno;
+    fprintf (stderr, "if_nametoindex(\"%s\") failed to obtain interface index.\nError message: %s\n", interface, strerror (status));
+    exit (EXIT_FAILURE);
+  }
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
+  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
   device.sll_halen = 6;
 
   // IPv4 header
@@ -167,8 +143,8 @@ main (int argc, char **argv) {
   // Total length of datagram (16 bits): IP header + TCP header
   iphdr.ip_len = htons (IP4_HDRLEN + TCP_HDRLEN);
 
-  // ID sequence number (16 bits): unused, since single datagram
-  iphdr.ip_id = htons (0);
+  // IPv4 Identification field (16 bits)
+  iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
   // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
 
@@ -197,32 +173,42 @@ main (int argc, char **argv) {
 
   // Source IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, src_ip, &(iphdr.ip_src))) != 1) {
-    fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
   // Destination IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, dst_ip, &(iphdr.ip_dst))) != 1) {
-    fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
   // IPv4 header checksum (16 bits): set to 0 when calculating checksum
   iphdr.ip_sum = 0;
-  iphdr.ip_sum = checksum ((uint16_t *) &iphdr, IP4_HDRLEN);
+  iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
   // TCP header
 
   // Source port number (16 bits)
-  tcphdr.th_sport = htons (60);
+  // Some random, high ephemeral port number; Some firewalls dislike packets claiming to originate from Port 80.
+  tcphdr.th_sport = htons (49152 + (rand () % 16384));
 
   // Destination port number (16 bits)
   tcphdr.th_dport = htons (80);
 
-  // Sequence number (32 bits)
-  tcphdr.th_seq = htonl (0);
+  // Sequence number (32 bits): random initial sequence number (ISN)
+  seq = ((uint32_t) rand () << 16) | ((uint32_t) rand () & 0xffff);
+  tcphdr.th_seq = htonl (seq);
 
-  // Acknowledgement number (32 bits): 0 in first packet of SYN/ACK process
+  // Acknowledgement number (32 bits): not used in initial SYN packet.
   tcphdr.th_ack = htonl (0);
 
   // Reserved (4 bits): should be 0
@@ -258,7 +244,7 @@ main (int argc, char **argv) {
   tcp_flags[7] = 0;
 
   tcphdr.th_flags = 0;
-  for (i=0; i<8; i++) {
+  for (i = 0; i < 8; i++) {
     tcphdr.th_flags += (tcp_flags[i] << i);
   }
 
@@ -269,43 +255,50 @@ main (int argc, char **argv) {
   tcphdr.th_urp = htons (0);
 
   // TCP checksum (16 bits)
-  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr);
+  tcphdr.th_sum = 0;
+  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, NULL, 0);
 
-  // Fill out ethernet frame header.
+  // Fill out IPv4 datagram.
 
-  // Ethernet frame length = ethernet data (IP header + TCP header)
-  frame_length = IP4_HDRLEN + TCP_HDRLEN;
+  // Datagram length = IP header + TCP header
+  datagram_length = IP4_HDRLEN + TCP_HDRLEN;
 
   // IPv4 header
-  memcpy (ether_frame, &iphdr, IP4_HDRLEN);
+  memcpy (datagram, &iphdr, IP4_HDRLEN);
 
   // TCP header
-  memcpy (ether_frame + IP4_HDRLEN, &tcphdr, TCP_HDRLEN);
+  memcpy (datagram + IP4_HDRLEN, &tcphdr, TCP_HDRLEN);
 
   // Open raw socket descriptor.
-  if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed ");
+  if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IP))) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
-  if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
-    perror ("sendto() failed");
+  // Send datagram to socket.
+  bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &device, sizeof (device));
+  if (bytes == -1) {
+    status = errno;
+    fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
+  // Check for short send.
+  if (bytes != datagram_length) {
+    fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
+    exit(EXIT_FAILURE);
+  }
 
+  // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.
-  free (src_mac);
   free (dst_mac);
-  free (ether_frame);
+  free (datagram);
   free (interface);
   free (target);
   free (src_ip);
   free (dst_ip);
-  free (ip_flags);
-  free (tcp_flags);
 
   return (EXIT_SUCCESS);
 }
@@ -313,21 +306,23 @@ main (int argc, char **argv) {
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum is not guaranteed to preclude collisions.
 uint16_t
-checksum (uint16_t *addr, int len) {
+checksum (uint8_t *addr, int len) {
 
   int count = len;
-  register uint32_t sum = 0;
+  uint32_t sum = 0;
   uint16_t answer = 0;
 
   // Sum up 2-byte values until none or only one byte left.
   while (count > 1) {
-    sum += *(addr++);
+    sum += ((uint16_t) addr[0] << 8) + addr[1];
+    addr += 2;
     count -= 2;
   }
 
-  // Add left-over byte, if any.
+  // Add left-over byte, if any. For an odd-length buffer, the
+  // remaining byte is the high-order byte of the final 16-bit word.
   if (count > 0) {
-    sum += *(uint8_t *) addr;
+    sum += ((uint16_t) addr[0] << 8);
   }
 
   // Fold 32-bit sum into 16 bits; we lose information by doing this,
@@ -337,21 +332,69 @@ checksum (uint16_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum.
+  // Checksum is one's compliment of sum. Return it in network byte order
+  // so it can be copied directly into the packet header.
   answer = ~sum;
 
-  return (answer);
+  return (htons (answer));
 }
 
 // Build IPv4 TCP pseudo-header and call checksum function.
+// This version supports any combination of TCP options and TCP payload:
+//   options == NULL and opt_len == 0        : no TCP options
+//   payload == NULL and payloadlen == 0     : no TCP payload
+//   options + payload                       : TCP options followed by TCP payload
+//
+// The caller must set tcphdr.th_off before calling this function.  th_off is
+// the TCP header length in 32-bit words, so it must include any TCP options.
+// For example:
+//   tcphdr.th_off = (TCP_HDRLEN + opt_len) / 4;
+//
+// opt_len should normally be padded to a 4-byte boundary before calling this
+// function, because TCP options are part of the TCP header and the TCP header
+// length is measured in 32-bit words.
 uint16_t
-tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr) {
+tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_len, uint8_t *payload, int payloadlen) {
 
-  uint16_t svalue;
-  char buf[IP_MAXPACKET], cvalue;
-  char *ptr;
-  int chksumlen = 0;
+  int tcp_hdrlen, tcp_segment_len, chksumlen = 0;
+  uint8_t *buf, *ptr, cvalue;
+  uint16_t svalue, answer = 0;
 
+  if (opt_len < 0) {
+    fprintf (stderr, "ERROR: opt_len must not be negative in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if (payloadlen < 0) {
+    fprintf (stderr, "ERROR: payloadlen must not be negative in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if ((opt_len > 0) && (options == NULL)) {
+    fprintf (stderr, "ERROR: options is NULL but opt_len > 0 in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if ((payloadlen > 0) && (payload == NULL)) {
+    fprintf (stderr, "ERROR: payload is NULL but payloadlen > 0 in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  tcp_hdrlen = tcphdr.th_off * 4;
+  tcp_segment_len = tcp_hdrlen + payloadlen;
+
+  if (tcp_hdrlen < (int) sizeof (tcphdr)) {
+    fprintf (stderr, "ERROR: TCP header length is too small in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if (tcp_hdrlen != ((int) sizeof (tcphdr) + opt_len)) {
+    fprintf (stderr, "ERROR: TCP header length does not match TCP_HDRLEN + opt_len in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if ((opt_len % 4) != 0) {
+    fprintf (stderr, "ERROR: TCP option length must be padded to a 4-byte boundary in tcp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  // Allocate memory for buffer.
+  buf = allocate_ustrmem (12 + tcp_segment_len + 1);  // Add 1 for possible padding.
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy source IP address into buf (32 bits)
@@ -366,15 +409,15 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr) {
 
   // Copy zero field to buf (8 bits)
   *ptr = 0; ptr++;
-  chksumlen += 1;
+  chksumlen++;
 
   // Copy transport layer protocol to buf (8 bits)
   memcpy (ptr, &iphdr.ip_p, sizeof (iphdr.ip_p));
   ptr += sizeof (iphdr.ip_p);
   chksumlen += sizeof (iphdr.ip_p);
 
-  // Copy TCP length to buf (16 bits)
-  svalue = htons (sizeof (tcphdr));
+  // Copy TCP length to buf (16 bits): TCP header + TCP payload.
+  svalue = htons (tcp_segment_len);
   memcpy (ptr, &svalue, sizeof (svalue));
   ptr += sizeof (svalue);
   chksumlen += sizeof (svalue);
@@ -417,7 +460,7 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr) {
   chksumlen += sizeof (tcphdr.th_win);
 
   // Copy TCP checksum to buf (16 bits)
-  // Zero, since we don't know it yet
+  // Zero, since we don't know it yet.
   *ptr = 0; ptr++;
   *ptr = 0; ptr++;
   chksumlen += 2;
@@ -427,7 +470,34 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr) {
   ptr += sizeof (tcphdr.th_urp);
   chksumlen += sizeof (tcphdr.th_urp);
 
-  return checksum ((uint16_t *) buf, chksumlen);
+  // Copy TCP options to buf, if any. TCP options come immediately after
+  // the fixed 20-byte TCP header and before any TCP payload.
+  if (opt_len > 0) {
+    memcpy (ptr, options, opt_len);
+    ptr += opt_len;
+    chksumlen += opt_len;
+  }
+
+  // Copy TCP payload to buf, if any.
+  if (payloadlen > 0) {
+    memcpy (ptr, payload, payloadlen);
+    ptr += payloadlen;
+    chksumlen += payloadlen;
+  }
+
+  // Pad to the next 16-bit boundary. The padding byte is used only for
+  // checksum calculation and is not part of the TCP segment length.
+  if ((tcp_segment_len % 2) != 0) {
+    *ptr = 0;
+    chksumlen++;
+  }
+
+  answer = checksum ((uint8_t *) buf, chksumlen);
+
+  // Free allocated memory.
+  free (buf);
+
+  return (answer);
 }
 
 // Allocate memory for an array of chars.
@@ -437,13 +507,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -458,37 +527,15 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");
-    exit (EXIT_FAILURE);
-  }
-}
-
-// Allocate memory for an array of ints.
-int *
-allocate_intmem (int len) {
-
-  void *tmp;
-
-  if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_intmem().\n", len);
-    exit (EXIT_FAILURE);
-  }
-
-  tmp = (int *) malloc (len * sizeof (int));
-  if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (int));
-    return (tmp);
-  } else {
-    fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_intmem().\n");
     exit (EXIT_FAILURE);
   }
 }

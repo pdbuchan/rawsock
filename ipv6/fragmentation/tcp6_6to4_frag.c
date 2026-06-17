@@ -1,4 +1,4 @@
-/*  Copyright (C) 2012-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2012-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 // at the link layer (ethernet frame) with a large payload requiring fragmentation.
 // Includes a TCP header option. Need to have destination MAC address.
 
+#define __FAVOR_BSD           // Use BSD format of tcp header
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -28,12 +29,10 @@
 #include <sys/socket.h>       // needed for socket()
 #include <netinet/in.h>       // IPPROTO_IPV6, IPPROTO_TCP, IPPROTO_FRAGMENT, INET_ADDRSTRLEN, INET6_ADDRSTRLEN
 #include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
-#define __FAVOR_BSD           // Use BSD format of tcp header
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/tcp.h>      // struct tcphdr
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl. Here, we need SIOCGIFHWADDR.
 #include <net/if.h>           // struct ifreq
 #include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
@@ -47,9 +46,10 @@
 #define IP6_HDRLEN 40        // IPv6 header length
 #define FRG_HDRLEN 8         // IPv6 fragment header
 #define TCP_HDRLEN 20        // TCP header length, excludes options data
+#define TEXT_STRINGLEN 80    // Maximum number of characters in a string
 
 // Function prototypes
-uint16_t checksum (uint16_t *, int);
+uint16_t checksum (uint8_t *, int);
 uint16_t tcp6_checksum (struct ip6_hdr, struct tcphdr, int, uint8_t *, int, uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
@@ -77,7 +77,7 @@ main (int argc, char **argv) {
 
   // Allocate memory for various arrays.
   target4 = allocate_strmem (INET_ADDRSTRLEN);
-  target6 = allocate_strmem (INET6_ADDRSTRLEN);
+  target6 = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
   source4 = allocate_strmem (INET_ADDRSTRLEN);
   source6 = allocate_strmem (INET6_ADDRSTRLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
@@ -87,13 +87,13 @@ main (int argc, char **argv) {
   src_mac = allocate_ustrmem (6);
   dst_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (IP_MAXPACKET);
-  interface = allocate_strmem (40);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
   options = allocate_ustrmem (40);
   frag_flags = allocate_intmem (2);
   payload = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send packet through.
-  strcpy (interface, "eno1");
+  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -103,7 +103,10 @@ main (int argc, char **argv) {
 
   // Use ioctl() to look up interface name and get its MAC address.
   memset (&ifr, 0, sizeof (ifr));
-  snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
+  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
+    fprintf (stderr, "Interface name too long.\n");
+    exit (EXIT_FAILURE);
+  }
   if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
     perror ("ioctl() failed to get source MAC address ");
     return (EXIT_FAILURE);
@@ -114,11 +117,10 @@ main (int argc, char **argv) {
   memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
 
   // Report source MAC address to stdout.
-  printf ("MAC address for interface %s is ", interface);
-  for (i=0; i<5; i++) {
-    printf ("%02x:", src_mac[i]);
+  fprintf (stdout, "MAC address for interface %s is ", interface);
+  for (i = 0; i < 6; i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
   }
-  printf ("%02x\n", src_mac[5]);
 
   // Find interface index from interface name and store index in
   // struct sockaddr_ll device, which will be used as an argument of sendto().
@@ -127,7 +129,7 @@ main (int argc, char **argv) {
     perror ("if_nametoindex() failed to obtain interface index ");
     exit (EXIT_FAILURE);
   }
-  printf ("Index for interface %s is %i\n", interface, device.sll_ifindex);
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
 
   // Set destination MAC address: you need to fill these out
   dst_mac[0] = 0xff;
@@ -138,16 +140,16 @@ main (int argc, char **argv) {
   dst_mac[5] = 0xff;
 
   // Source IPv4 address: you need to fill this out
-  strcpy (source4, "192.168.0.240");
+  strncpy (source4, "192.168.0.240", INET_ADDRSTRLEN);
 
   // Source IPv6 address: you need to fill this out
-  strcpy (source6, "2001:db8::214:51ff:fe2f:1556");
+  strncpy (source6, "2001:db8::214:51ff:fe2f:1556", INET6_ADDRSTRLEN);
 
   // IPv4 target as the 6to4 anycast address (do not change)
-  strcpy (target4, "192.88.99.1");
+  strncpy (target4, "192.88.99.1", INET_ADDRSTRLEN);
 
   // Target URL or IPv6 address: you need to fill this out
-  strcpy (target6, "ipv6.google.com");
+  strncpy (target6, "ipv6.google.com", TEXT_STRINGLEN);
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -206,7 +208,7 @@ main (int argc, char **argv) {
   i = 0;
   fi = fopen ("data", "r");
   if (fi == NULL) {
-    printf ("Can't open file 'data'.\n");
+    fprintf (stderr, "Can't open file 'data'.\n");
     exit (EXIT_FAILURE);
   }
   while ((n=fgetc (fi)) != EOF) {
@@ -215,15 +217,15 @@ main (int argc, char **argv) {
   }
   fclose (fi);
   payloadlen = i;
-  printf ("IPv6 header length (bytes): %i\n", IP6_HDRLEN);
-  printf ("Upper layer protocol header (TCP) length (bytes): %i\n", TCP_HDRLEN);
-  printf ("TCP options length (bytes): %i\n", opt_len);
-  printf ("TCP options padding length (bytes): %i\n", opt_pad);
-  printf ("Payload length (bytes): %i\n", payloadlen);
+  fprintf (stdout, "IPv6 header length (bytes): %d\n", IP6_HDRLEN);
+  fprintf (stdout, "Upper layer protocol header (TCP) length (bytes): %d\n", TCP_HDRLEN);
+  fprintf (stdout, "TCP options length (bytes): %d\n", opt_len);
+  fprintf (stdout, "TCP options padding length (bytes): %d\n", opt_pad);
+  fprintf (stdout, "Payload length (bytes): %d\n", payloadlen);
 
   // Length of fragmentable portion of packet.
   bufferlen = TCP_HDRLEN + opt_len + opt_pad + payloadlen;
-  printf ("Total fragmentable data (bytes): %i\n", bufferlen);
+  fprintf (stdout, "Total fragmentable data (bytes): %d\n", bufferlen);
 
   // Allocate memory for a buffer for fragmentable portion.
   buffer = allocate_ustrmem (bufferlen);
@@ -255,12 +257,12 @@ main (int argc, char **argv) {
         c--;
       }
     }
-    printf ("Frag: %i,  Data (bytes): %i,  Data Offset (8-byte blocks): %i\n", i, len[i], offset[i]);
+    fprintf (stdout, "Frag: %d,  Data (bytes): %d,  Data Offset (8-byte blocks): %d\n", i, len[i], offset[i]);
     i++;
     offset[i] = (len[i-1] / 8) + offset[i-1];
   }
   nframes = i;
-  printf ("Total number of frames to send: %i\n", nframes);
+  fprintf (stdout, "Total number of frames to send: %d\n", nframes);
 
   // IPv4 header (Section 3.5 of RFC 4213)
 
@@ -320,7 +322,7 @@ main (int argc, char **argv) {
 
   // IPv4 header checksum (16 bits) - set to 0 when calculating checksum
   ip4hdr.ip_sum = 0;
-  ip4hdr.ip_sum = checksum ((uint16_t *) &ip4hdr, IP4_HDRLEN);
+  ip4hdr.ip_sum = checksum ((uint8_t *) &ip4hdr, IP4_HDRLEN);
 
   // IPv6 header
 
@@ -397,7 +399,7 @@ main (int argc, char **argv) {
   tcp_flags[7] = 0;
 
   tcphdr.th_flags = 0;
-  for (i=0; i<8; i++) {
+  for (i = 0; i < 8; i++) {
     tcphdr.th_flags += (tcp_flags[i] << i);
   }
 
@@ -429,7 +431,7 @@ main (int argc, char **argv) {
   }
 
   // Loop through fragments.
-  for (i=0; i<nframes; i++) {
+  for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
     memset (ether_frame, 0, IP_MAXPACKET * sizeof (uint8_t));
@@ -456,7 +458,7 @@ main (int argc, char **argv) {
 
     // IPv4 header checksum (16 bits)
     ip4hdr.ip_sum = 0;
-    ip4hdr.ip_sum = checksum ((uint16_t *) &ip4hdr, IP4_HDRLEN);
+    ip4hdr.ip_sum = checksum ((uint8_t *) &ip4hdr, IP4_HDRLEN);
 
     // Copy IPv4 header to ethernet frame.
     memcpy (ether_frame + ETH_HDRLEN, &ip4hdr, IP4_HDRLEN * sizeof (uint8_t));
@@ -501,7 +503,7 @@ main (int argc, char **argv) {
     }
 
     // Send ethernet frame to socket.
-    printf ("Sending fragment: %i\n", i);
+    fprintf (stdout, "Sending fragment: %d\n", i);
     if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
       perror ("sendto() failed");
       exit (EXIT_FAILURE);
@@ -535,21 +537,23 @@ main (int argc, char **argv) {
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum is not guaranteed to preclude collisions.
 uint16_t
-checksum (uint16_t *addr, int len) {
+checksum (uint8_t *addr, int len) {
 
   int count = len;
-  register uint32_t sum = 0;
+  uint32_t sum = 0;
   uint16_t answer = 0;
 
   // Sum up 2-byte values until none or only one byte left.
   while (count > 1) {
-    sum += *(addr++);
+    sum += ((uint16_t) addr[0] << 8) + addr[1];
+    addr += 2;
     count -= 2;
   }
 
-  // Add left-over byte, if any.
+  // Add left-over byte, if any. For an odd-length buffer, the
+  // remaining byte is the high-order byte of the final 16-bit word.
   if (count > 0) {
-    sum += *(uint8_t *) addr;
+    sum += ((uint16_t) addr[0] << 8);
   }
 
   // Fold 32-bit sum into 16 bits; we lose information by doing this,
@@ -559,10 +563,11 @@ checksum (uint16_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum.
+  // Checksum is one's compliment of sum. Return it in network byte order
+  // so it can be copied directly into the packet header.
   answer = ~sum;
 
-  return (answer);
+  return (htons (answer));
 }
 
 // Build IPv6 TCP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
@@ -573,7 +578,6 @@ tcp6_checksum (struct ip6_hdr iphdr, struct tcphdr tcphdr, int opt_len, uint8_t 
   char buf[IP_MAXPACKET], cvalue;
   char *ptr;
   int chksumlen = 0;
-  int i;
 
   memset (buf, 0, IP_MAXPACKET * sizeof (uint8_t));
 
@@ -671,14 +675,12 @@ tcp6_checksum (struct ip6_hdr iphdr, struct tcphdr tcphdr, int opt_len, uint8_t 
   chksumlen += payloadlen;
 
   // Pad to the next 16-bit boundary
-  i = 0;
-  while (((payloadlen+i)%2) != 0) {
-    i++;
+  if (payloadlen % 2) {
+    *ptr = 0;
     chksumlen++;
-    ptr++;
   }
 
-  return checksum ((uint16_t *) buf, chksumlen);
+  return checksum ((uint8_t *) buf, chksumlen);
 }
 
 // Allocate memory for an array of chars.
@@ -688,13 +690,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -709,13 +710,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");
@@ -730,13 +730,12 @@ allocate_intmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_intmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_intmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (int *) malloc (len * sizeof (int));
+  tmp = calloc (len, sizeof (int));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (int));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_intmem().\n");

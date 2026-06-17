@@ -1,4 +1,4 @@
-/*  Copyright (C) 2011-2015  P.D. Buchan (pdbuchan@gmail.com)
+/*  Copyright (C) 2011-2026  P.D. Buchan (pdbuchan@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,11 +30,13 @@
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
 #include <netdb.h>            // struct addrinfo
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/ioctls.h>      // defines values for argument "request" of ioctl. Here, we need SIOCGIFHWADDR
 #include <bits/socket.h>      // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
 
 #include <errno.h>            // errno, perror()
+
+// Define some constants.
+#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Definition of pktinfo6 created from definition of in6_pktinfo in netinet/in.h.
 // This should remove "redefinition of in6_pktinfo" errors in some linux variants.
@@ -67,11 +69,11 @@ main (int argc, char **argv) {
   // Allocate memory for various arrays.
   inpack = allocate_ustrmem (IP_MAXPACKET);
   target = allocate_strmem (INET6_ADDRSTRLEN);
-  interface = allocate_strmem (40);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
   destination = allocate_strmem (INET6_ADDRSTRLEN);
 
   // Interface to receive packet on.
-  strcpy (interface, "eno1");
+  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
 
   // Prepare msghdr for recvmsg().
   memset (&msghdr, 0, sizeof (msghdr));
@@ -108,7 +110,10 @@ main (int argc, char **argv) {
 
   // Obtain MAC address of this node.
   memset (&ifr, 0, sizeof (ifr));
-  snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
+  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
+    fprintf (stderr, "Interface name too long.\n");
+    exit (EXIT_FAILURE);
+  }
   if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
     perror ("ioctl() failed to get source MAC address ");
     return (EXIT_FAILURE);
@@ -119,7 +124,7 @@ main (int argc, char **argv) {
     perror ("if_nametoindex() failed to obtain interface index ");
     exit (EXIT_FAILURE);
   }
-  printf ("\nOn this node, index for interface %s is %i\n", interface, ifindex);
+  fprintf (stdout, "\nOn this node, index for interface %s is %d\n", interface, ifindex);
 
   // Bind socket to interface of this node.
   if (setsockopt (sd, SOL_SOCKET, SO_BINDTODEVICE, (void *) &ifr, sizeof (ifr)) < 0) {
@@ -138,14 +143,14 @@ main (int argc, char **argv) {
   }
 
   // Ancillary data
-  printf ("\nIPv6 header data:\n");
+  fprintf (stdout, "\nIPv6 header data:\n");
   opt = find_ancillary (&msghdr, IPV6_HOPLIMIT);
   if (opt == NULL) {
     fprintf (stderr, "Unknown hop limit\n");
     exit (EXIT_FAILURE);
   }
   hoplimit = *(int *) opt;
-  printf ("Hop limit: %i\n", hoplimit);
+  fprintf (stdout, "Hop limit: %d\n", hoplimit);
 
   opt = find_ancillary (&msghdr, IPV6_PKTINFO);
   if (opt == NULL) {
@@ -159,35 +164,35 @@ main (int argc, char **argv) {
     fprintf (stderr, "inet_ntop() failed for received destination address.\nError message: %s", strerror (status));
     exit (EXIT_FAILURE);
   }
-  printf ("Destination address: %s\n", destination);
+  fprintf (stdout, "Destination address: %s\n", destination);
 
   rcv_ifindex = ((pktinfo6 *) opt)->ipi6_ifindex;
-  printf ("Destination interface index: %i\n", rcv_ifindex);
+  fprintf (stdout, "Destination interface index: %d\n", rcv_ifindex);
 
   // ICMPv6 header and options data
-  printf ("\nICMPv6 header data:\n");
-  printf ("Type: %u\n", na->nd_na_hdr.icmp6_type);
-  printf ("Code: %u\n", na->nd_na_hdr.icmp6_code);
-  printf ("Checksum: %x\n", ntohs (na->nd_na_hdr.icmp6_cksum));
-  printf ("Router flag: %u\n", ntohl (na->nd_na_flags_reserved) >> 31);
-  printf ("Solicited flag: %u\n", (ntohl (na->nd_na_flags_reserved) >> 30) & 1);
-  printf ("Override flag: %u\n", (ntohl (na->nd_na_flags_reserved) >> 29) & 1);
-  printf ("Reserved: %i\n", ntohl (na->nd_na_flags_reserved) & 536870911u);
+  fprintf (stdout, "\nICMPv6 header data:\n");
+  fprintf (stdout, "Type: %u\n", na->nd_na_hdr.icmp6_type);
+  fprintf (stdout, "Code: %u\n", na->nd_na_hdr.icmp6_code);
+  fprintf (stdout, "Checksum: %x\n", ntohs (na->nd_na_hdr.icmp6_cksum));
+  fprintf (stdout, "Router flag: %u\n", ntohl (na->nd_na_flags_reserved) >> 31);
+  fprintf (stdout, "Solicited flag: %u\n", (ntohl (na->nd_na_flags_reserved) >> 30) & 1);
+  fprintf (stdout, "Override flag: %u\n", (ntohl (na->nd_na_flags_reserved) >> 29) & 1);
+  fprintf (stdout, "Reserved: %d\n", ntohl (na->nd_na_flags_reserved) & 536870911u);
   if (inet_ntop (AF_INET6, &(na->nd_na_target), target, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for received target address of neighbor solicitation.\nError message: %s", strerror (status));
     exit (EXIT_FAILURE);
   }
-  printf ("Target address of neighbor solicitation: %s\n", target);
-  printf ("\nOptions:\n");
+  fprintf (stdout, "Target address of neighbor solicitation: %s\n", target);
+  fprintf (stdout, "\nOptions:\n");
   pkt = (uint8_t *) inpack;
-  printf ("Type: %u\n", pkt[sizeof (struct nd_neighbor_advert)]);
-  printf ("Length: %u (units of 8 octets)\n", pkt[sizeof (struct nd_neighbor_advert) + 1]);
-  printf ("MAC address: ");
-  for (i=2; i<7; i++) {
-    printf ("%02x:", pkt[sizeof (struct nd_neighbor_advert) + i]);
+  fprintf (stdout, "Type: %u\n", pkt[sizeof (struct nd_neighbor_advert)]);
+  fprintf (stdout, "Length: %u (units of 8 octets)\n", pkt[sizeof (struct nd_neighbor_advert) + 1]);
+  fprintf (stdout, "MAC address: ");
+  for (i = 2; i < 7; i++) {
+    fprintf (stdout, "%02x:", pkt[sizeof (struct nd_neighbor_advert) + i]);
   }
-  printf ("%02x\n", pkt[sizeof (struct nd_neighbor_advert) + 7]);
+  fprintf (stdout, "%02x\n", pkt[sizeof (struct nd_neighbor_advert) + 7]);
 
   close (sd);
 
@@ -222,13 +227,12 @@ allocate_strmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_strmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_strmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (char *) malloc (len * sizeof (char));
+  tmp = calloc (len, sizeof (char));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (char));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_strmem().\n");
@@ -243,13 +247,12 @@ allocate_ustrmem (int len) {
   void *tmp;
 
   if (len <= 0) {
-    fprintf (stderr, "ERROR: Cannot allocate memory because len = %i in allocate_ustrmem().\n", len);
+    fprintf (stderr, "ERROR: Cannot allocate memory because len = %d in allocate_ustrmem().\n", len);
     exit (EXIT_FAILURE);
   }
 
-  tmp = (uint8_t *) malloc (len * sizeof (uint8_t));
+  tmp = calloc (len, sizeof (uint8_t));
   if (tmp != NULL) {
-    memset (tmp, 0, len * sizeof (uint8_t));
     return (tmp);
   } else {
     fprintf (stderr, "ERROR: Cannot allocate memory for array allocate_ustrmem().\n");
