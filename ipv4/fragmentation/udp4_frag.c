@@ -61,7 +61,7 @@ main (void) {
   struct ip iphdr;
   struct udphdr udphdr;
   int payloadlen, bufferlen;
-  uint8_t *payload, *buffer, *src_mac, *dst_mac, *ether_frame;
+  uint8_t *payload, *buffer, *src_mac, *ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device;
@@ -74,7 +74,6 @@ main (void) {
 
   // Allocate memory for various arrays.
   src_mac = allocate_ustrmem (6);
-  dst_mac = allocate_ustrmem (6);
   payload = allocate_ustrmem (IP_MAXPACKET);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
@@ -134,12 +133,7 @@ main (void) {
   }
 
   // Set destination MAC address: you need to fill these out
-  dst_mac[0] = 0x0c;
-  dst_mac[1] = 0x9d;
-  dst_mac[2] = 0x92;
-  dst_mac[3] = 0x02;
-  dst_mac[4] = 0x58;
-  dst_mac[5] = 0x58;
+  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
@@ -407,7 +401,6 @@ main (void) {
 
   // Free allocated memory.
   free (src_mac);
-  free (dst_mac);
   free (ether_frame);
   free (interface);
   free (target);
