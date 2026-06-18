@@ -84,7 +84,7 @@ main (void) {
 
   // Set TCP data.
   snprintf (url, TEXT_STRINGLEN, "%s", "www.google.com");  // Could be URL or IPv4 address
-  snprintf (directory, TEXT_STRINGLEN, "/");
+  snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
   snprintf (filename, TEXT_STRINGLEN, "filename");  // File we want to get
   snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
   payloadlen = strnlen (payload, IP_MAXPACKET);

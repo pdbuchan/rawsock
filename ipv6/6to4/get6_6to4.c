@@ -141,20 +141,10 @@ main (void) {
 
   // Set TCP data.
   snprintf (url, TEXT_STRINGLEN, "%s", "www.google.com");  // Could be URL or IPv6 address.
-  snprintf (directory, TEXT_STRINGLEN, "/");
+  snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
   snprintf (filename, TEXT_STRINGLEN, "filename");
   snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
   payloadlen = strlen (payload);
-
-
-
-  snprintf (get_string, TEXT_STRINGLEN, "GET %s%s HTTP/1.1\r\n"
-                       "Host: %s\r\n"
-                       "Connection: close\r\n"
-                       "\r\n",
-                       data->rir_dir[data->rir_index],
-                       data->rir_file[data->rir_index],
-                       data->rir_ftp[data->rir_index]);
 
   // Source IPv4 address: you need to fill this out
   snprintf (src_ip4, INET_ADDRSTRLEN, "%s", "192.168.0.9");
