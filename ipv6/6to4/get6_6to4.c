@@ -94,8 +94,9 @@ main (void) {
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed to get socket descriptor for using ioctl() ");
+  if ((sd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor for using ioctl().\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
@@ -106,10 +107,10 @@ main (void) {
     fprintf (stderr, "Invalid interface name: %s\n", interface);
     exit (EXIT_FAILURE);
   }
-
   if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
-    perror ("ioctl() failed to get source MAC address ");
-    return (EXIT_FAILURE);
+    fprintf (stderr, "ioctl(SIOCGIFHWADDR) failed to get source MAC address.\nError message: %s\n", strerror (errno));
+    close (sd);
+    exit (EXIT_FAILURE);
   }
   close (sd);
 
@@ -123,8 +124,7 @@ main (void) {
   }
 
   // Set destination MAC address: you need to fill these out
-  uint8_t dst_mac[6] = {0x0c, 0x9d, 0x92, 0x02, 0x58, 0x58};
-//  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Fill out device's sockaddr_ll struct.
   memset (&device, 0, sizeof (device));
