@@ -75,7 +75,7 @@ main (void) {
   struct ip *iphdr;
   struct tcphdr *tcphdr;
   struct icmp *icmphdr;
-  uint8_t *src_mac, *dst_mac;
+  uint8_t *src_mac;
   uint8_t *snd_ether_frame, *rec_ether_frame;
   uint8_t *data;
   uint16_t tcp_sport, icmpid, icmpseq, udp_sport, udp_dport;
@@ -121,7 +121,6 @@ main (void) {
   data = allocate_ustrmem (IP_MAXPACKET);
   rec_ip = allocate_strmem (INET_ADDRSTRLEN);
   src_mac = allocate_ustrmem (6);
-  dst_mac = allocate_ustrmem (6);
   snd_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   rec_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
@@ -660,7 +659,6 @@ main (void) {
   free (udp_dat);
   free (data);
   free (src_mac);
-  free (dst_mac);
   free (snd_ether_frame);
   free (rec_ether_frame);
   free (interface);
