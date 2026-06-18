@@ -525,23 +525,23 @@ checksum (uint8_t *addr, int len) {
 
 // Build ICMP message and calculate ICMP checksum.
 uint16_t
-icmp4_checksum (struct icmp icmphdr, uint8_t *payload, int payloadlen) {
+icmp4_checksum (struct icmp icmphdr, uint8_t *icmpdata, int icmp_datalen) {
 
   int icmp_segment_len, chksumlen = 0;
   uint8_t *buf, *ptr;
   uint16_t answer = 0;
 
-  if (payloadlen < 0) {
-    fprintf (stderr, "ERROR: payloadlen must not be negative in icmp4_checksum().\n");
+  if (icmp_datalen < 0) {
+    fprintf (stderr, "ERROR: icmp_datalen must not be negative in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  if ((payloadlen > 0) && (payload == NULL)) {
-    fprintf (stderr, "ERROR: payload is NULL but payloadlen > 0 in icmp4_checksum().\n");
+  if ((icmp_datalen > 0) && (icmpdata == NULL)) {
+    fprintf (stderr, "ERROR: icmpdata is NULL but icmp_datalen > 0 in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  icmp_segment_len = ICMP_HDRLEN + payloadlen;
+  icmp_segment_len = ICMP_HDRLEN + icmp_datalen;
 
   // Allocate memory for buffer.
   buf = allocate_ustrmem (icmp_segment_len + 1);  // Add 1 for possible padding.
@@ -573,15 +573,15 @@ icmp4_checksum (struct icmp icmphdr, uint8_t *payload, int payloadlen) {
   ptr += sizeof (icmphdr.icmp_seq);
   chksumlen += sizeof (icmphdr.icmp_seq);
 
-  // Copy payload to buf, if any.
-  if (payloadlen > 0) {
-    memcpy (ptr, payload, payloadlen);
-    ptr += payloadlen;
-    chksumlen += payloadlen;
+  // Copy ICMP data to buf, if any.
+  if (icmp_datalen > 0) {
+    memcpy (ptr, icmpdata, icmp_datalen);
+    ptr += icmp_datalen;
+    chksumlen += icmp_datalen;
   }
 
   // Pad to the next 16-bit boundary
-  if (payloadlen % 2) {
+  if (icmp_datalen % 2) {
     *ptr = 0;
     chksumlen++;
   }

@@ -15,7 +15,7 @@
 */
 
 // Send an IPv4 ICMP packet via raw socket at the link layer (ethernet frame)
-// with a large payload requiring fragmentation.
+// with a large amount of ICMP data requiring fragmentation.
 // Need to have destination MAC address.
 
 #include <stdio.h>
@@ -55,14 +55,13 @@ int *allocate_intmem (int);
 int
 main (void) {
 
-  int i, n, status, frame_length, sd;
+  int i, n, status, frame_length, sd, icmp_datalen, bufferlen;
   int ip_flags[4] = {0}, mtu, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct icmp icmphdr;
-  int payloadlen, bufferlen;
-  uint8_t *payload, *buffer, *src_mac, *ether_frame;
+  uint8_t *icmpdata, *buffer, *src_mac, *ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device;
@@ -75,7 +74,7 @@ main (void) {
 
   // Allocate memory for various arrays.
   src_mac = allocate_ustrmem (6);
-  payload = allocate_ustrmem (IP_MAXPACKET);
+  icmpdata = allocate_ustrmem (IP_MAXPACKET);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (TEXT_STRINGLEN);
@@ -191,16 +190,16 @@ main (void) {
       fprintf (stderr, "Payload too large.\n");
       exit (EXIT_FAILURE);
     }
-    payload[i] = (uint8_t) n;
+    icmpdata[i] = (uint8_t) n;
     i++;
   }
   fclose (fi);
-  payloadlen = i;
+  icmp_datalen = i;
   fprintf (stdout, "Upper layer protocol header length (bytes): %d\n", ICMP_HDRLEN);
-  fprintf (stdout, "Payload length (bytes): %d\n", payloadlen);
+  fprintf (stdout, "Payload length (bytes): %d\n", icmp_datalen);
 
   // Length of fragmentable portion of packet.
-  bufferlen = ICMP_HDRLEN + payloadlen;
+  bufferlen = ICMP_HDRLEN + icmp_datalen;
   fprintf (stdout, "Total fragmentable data (bytes): %d\n", bufferlen);
 
   // Allocate memory for a buffer for fragmentable portion.
@@ -323,13 +322,13 @@ main (void) {
 
   // ICMP header checksum (16 bits)
   icmphdr.icmp_cksum = 0;
-  icmphdr.icmp_cksum = icmp4_checksum (icmphdr, payload, payloadlen);
+  icmphdr.icmp_cksum = icmp4_checksum (icmphdr, icmpdata, icmp_datalen);
 
   // Build fragmentable portion of packet in buffer array.
   // ICMP header
   memcpy (buffer, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
   // ICMP data
-  memcpy (buffer + ICMP_HDRLEN, payload, payloadlen * sizeof (uint8_t));
+  memcpy (buffer + ICMP_HDRLEN, icmpdata, icmp_datalen * sizeof (uint8_t));
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -414,7 +413,7 @@ main (void) {
   free (target);
   free (src_ip);
   free (dst_ip);
-  free (payload);
+  free (icmpdata);
   free (buffer);
 
   return (EXIT_SUCCESS);
@@ -458,23 +457,23 @@ checksum (uint8_t *addr, int len) {
 
 // Build ICMP message and calculate ICMP checksum.
 uint16_t
-icmp4_checksum (struct icmp icmphdr, uint8_t *payload, int payloadlen) {
+icmp4_checksum (struct icmp icmphdr, uint8_t *icmpdata, int icmp_datalen) {
 
   int icmp_segment_len, chksumlen = 0;
   uint8_t *buf, *ptr;
   uint16_t answer = 0;
 
-  if (payloadlen < 0) {
-    fprintf (stderr, "ERROR: payloadlen must not be negative in icmp4_checksum().\n");
+  if (icmp_datalen < 0) {
+    fprintf (stderr, "ERROR: icmp_datalen must not be negative in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  if ((payloadlen > 0) && (payload == NULL)) {
-    fprintf (stderr, "ERROR: payload is NULL but payloadlen > 0 in icmp4_checksum().\n");
+  if ((icmp_datalen > 0) && (icmpdata == NULL)) {
+    fprintf (stderr, "ERROR: icmpdata is NULL but icmp_datalen > 0 in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  icmp_segment_len = ICMP_HDRLEN + payloadlen;
+  icmp_segment_len = ICMP_HDRLEN + icmp_datalen;
 
   // Allocate memory for buffer.
   buf = allocate_ustrmem (icmp_segment_len + 1);  // Add 1 for possible padding.
@@ -506,15 +505,15 @@ icmp4_checksum (struct icmp icmphdr, uint8_t *payload, int payloadlen) {
   ptr += sizeof (icmphdr.icmp_seq);
   chksumlen += sizeof (icmphdr.icmp_seq);
 
-  // Copy payload to buf, if any.
-  if (payloadlen > 0) {
-    memcpy (ptr, payload, payloadlen);
-    ptr += payloadlen;
-    chksumlen += payloadlen;
+  // Copy ICMP data to buf, if any.
+  if (icmp_datalen > 0) {
+    memcpy (ptr, icmpdata, icmp_datalen);
+    ptr += icmp_datalen;
+    chksumlen += icmp_datalen;
   }
 
   // Pad to the next 16-bit boundary
-  if (payloadlen % 2) {
+  if (icmp_datalen % 2) {
     *ptr = 0;
     chksumlen++;
   }

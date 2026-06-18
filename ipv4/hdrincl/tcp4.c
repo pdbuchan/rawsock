@@ -335,10 +335,10 @@ checksum (uint8_t *addr, int len) {
 }
 
 // Build IPv4 TCP pseudo-header and call checksum function.
-// This version supports any combination of TCP options and TCP payload:
-//   options == NULL and opt_len == 0        : no TCP options
-//   payload == NULL and payloadlen == 0     : no TCP payload
-//   options + payload                       : TCP options followed by TCP payload
+// This version supports any combination of TCP options and TCP tcp_data:
+//   options  == NULL and opt_len == 0       : no TCP options
+//   tcp_data == NULL and tcp_datalen == 0   : no TCP data
+//   options + tcp_data                      : TCP options followed by TCP data
 //
 // The caller must set tcphdr.th_off before calling this function.  th_off is
 // the TCP header length in 32-bit words, so it must include any TCP options.
@@ -349,7 +349,7 @@ checksum (uint8_t *addr, int len) {
 // function, because TCP options are part of the TCP header and the TCP header
 // length is measured in 32-bit words.
 uint16_t
-tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_len, uint8_t *payload, int payloadlen) {
+tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_len, uint8_t *tcp_data, int tcp_datalen) {
 
   int tcp_hdrlen, tcp_segment_len, chksumlen = 0;
   uint8_t *buf, *ptr, cvalue;
@@ -359,21 +359,21 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
     fprintf (stderr, "ERROR: opt_len must not be negative in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if (payloadlen < 0) {
-    fprintf (stderr, "ERROR: payloadlen must not be negative in tcp4_checksum().\n");
+  if (tcp_datalen < 0) {
+    fprintf (stderr, "ERROR: tcp_datalen must not be negative in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
   if ((opt_len > 0) && (options == NULL)) {
     fprintf (stderr, "ERROR: options is NULL but opt_len > 0 in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if ((payloadlen > 0) && (payload == NULL)) {
-    fprintf (stderr, "ERROR: payload is NULL but payloadlen > 0 in tcp4_checksum().\n");
+  if ((tcp_datalen > 0) && (tcp_data == NULL)) {
+    fprintf (stderr, "ERROR: tcp_data is NULL but tcp_datalen > 0 in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
   tcp_hdrlen = tcphdr.th_off * 4;
-  tcp_segment_len = tcp_hdrlen + payloadlen;
+  tcp_segment_len = tcp_hdrlen + tcp_datalen;
 
   if (tcp_hdrlen < TCP_HDRLEN) {
     fprintf (stderr, "ERROR: TCP header length is too small in tcp4_checksum().\n");
@@ -411,7 +411,7 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
   ptr += sizeof (iphdr.ip_p);
   chksumlen += sizeof (iphdr.ip_p);
 
-  // Copy TCP length to buf (16 bits): TCP header + TCP payload.
+  // Copy TCP length to buf (16 bits): TCP header + TCP tcp_data.
   svalue = htons (tcp_segment_len);
   memcpy (ptr, &svalue, sizeof (svalue));
   ptr += sizeof (svalue);
@@ -466,18 +466,18 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
   chksumlen += sizeof (tcphdr.th_urp);
 
   // Copy TCP options to buf, if any. TCP options come immediately after
-  // the fixed 20-byte TCP header and before any TCP payload.
+  // the fixed 20-byte TCP header and before any TCP tcp_data.
   if (opt_len > 0) {
     memcpy (ptr, options, opt_len);
     ptr += opt_len;
     chksumlen += opt_len;
   }
 
-  // Copy TCP payload to buf, if any.
-  if (payloadlen > 0) {
-    memcpy (ptr, payload, payloadlen);
-    ptr += payloadlen;
-    chksumlen += payloadlen;
+  // Copy TCP data to buf, if any.
+  if (tcp_datalen > 0) {
+    memcpy (ptr, tcp_data, tcp_datalen);
+    ptr += tcp_datalen;
+    chksumlen += tcp_datalen;
   }
 
   // Pad to the next 16-bit boundary. The padding byte is used only for

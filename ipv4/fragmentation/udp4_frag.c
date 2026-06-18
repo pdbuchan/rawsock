@@ -15,7 +15,7 @@
 */
 
 // Send an IPv4 UDP packet via raw socket at the link layer (ethernet frame)
-// with a large payload requiring fragmentation.
+// with a large amount of UDP data requiring fragmentation.
 // Need to have destination MAC address.
 
 #include <stdio.h>
@@ -54,14 +54,13 @@ uint8_t *allocate_ustrmem (int);
 int
 main (void) {
 
-  int i, n, status, frame_length, sd;
+  int i, n, status, frame_length, sd, udp_datalen, bufferlen;
   int ip_flags[4] = {0}, mtu, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct udphdr udphdr;
-  int payloadlen, bufferlen;
-  uint8_t *payload, *buffer, *src_mac, *ether_frame;
+  uint8_t *udp_data, *buffer, *src_mac, *ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device;
@@ -74,7 +73,7 @@ main (void) {
 
   // Allocate memory for various arrays.
   src_mac = allocate_ustrmem (6);
-  payload = allocate_ustrmem (IP_MAXPACKET);
+  udp_data = allocate_ustrmem (IP_MAXPACKET);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (TEXT_STRINGLEN);
@@ -186,16 +185,16 @@ main (void) {
       fprintf (stderr, "Payload too large.\n");
       exit (EXIT_FAILURE);
     }
-    payload[i] = n;
+    udp_data[i] = n;
     i++;
   }
   fclose (fi);
-  payloadlen = i;
+  udp_datalen = i;
   fprintf (stdout, "Upper layer protocol header length (bytes): %d\n", UDP_HDRLEN);
-  fprintf (stdout, "Payload length (bytes): %d\n", payloadlen);
+  fprintf (stdout, "Payload length (bytes): %d\n", udp_datalen);
 
   // Length of fragmentable portion of packet.
-  bufferlen = UDP_HDRLEN + payloadlen;
+  bufferlen = UDP_HDRLEN + udp_datalen;
   fprintf (stdout, "Total fragmentable data (bytes): %d\n", bufferlen);
 
   // Allocate memory for a buffer for fragmentable portion.
@@ -311,17 +310,17 @@ main (void) {
   udphdr.dest = htons (4950);
 
   // Length of UDP datagram (16 bits): UDP header + UDP data
-  udphdr.len = htons (UDP_HDRLEN + payloadlen);
+  udphdr.len = htons (UDP_HDRLEN + udp_datalen);
 
   // UDP checksum (16 bits)
   udphdr.check = 0;
-  udphdr.check = udp4_checksum (iphdr, udphdr, payload, payloadlen);
+  udphdr.check = udp4_checksum (iphdr, udphdr, udp_data, udp_datalen);
 
   // Build fragmentable portion of packet in buffer array.
   // UDP header
   memcpy (buffer, &udphdr, UDP_HDRLEN * sizeof (uint8_t));
   // UDP data
-  memcpy (buffer + UDP_HDRLEN, payload, payloadlen * sizeof (uint8_t));
+  memcpy (buffer + UDP_HDRLEN, udp_data, udp_datalen * sizeof (uint8_t));
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -406,7 +405,7 @@ main (void) {
   free (target);
   free (src_ip);
   free (dst_ip);
-  free (payload);
+  free (udp_data);
   free (buffer);
 
   return (EXIT_SUCCESS);
@@ -450,22 +449,22 @@ checksum (uint8_t *addr, int len) {
 
 // Build IPv4 UDP pseudo-header and call checksum function.
 uint16_t
-udp4_checksum (struct ip iphdr, struct udphdr udphdr, uint8_t *payload, int payloadlen) {
+udp4_checksum (struct ip iphdr, struct udphdr udphdr, uint8_t *udp_data, int udp_datalen) {
 
   int udp_segment_len, chksumlen = 0;
   uint8_t *buf, *ptr;
   uint16_t answer = 0;
 
-  if (payloadlen < 0) {
-    fprintf (stderr, "ERROR: payloadlen must not be negative in udp4_checksum().\n");
+  if (udp_datalen < 0) {
+    fprintf (stderr, "ERROR: udp_datalen must not be negative in udp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if ((payloadlen > 0) && (payload == NULL)) {
-    fprintf (stderr, "ERROR: payload is NULL but payloadlen > 0 in udp4_checksum().\n");
+  if ((udp_datalen > 0) && (udp_data == NULL)) {
+    fprintf (stderr, "ERROR: udp_data is NULL but udp_datalen > 0 in udp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  udp_segment_len = UDP_HDRLEN + payloadlen;
+  udp_segment_len = UDP_HDRLEN + udp_datalen;
 
   // Allocate memory for buffer.
   buf = allocate_ustrmem (12 + udp_segment_len + 1);  // Add 1 for possible padding.
@@ -516,15 +515,15 @@ udp4_checksum (struct ip iphdr, struct udphdr udphdr, uint8_t *payload, int payl
   *ptr = 0; ptr++;
   chksumlen += 2;
 
-  // Copy payload to buf, if any.
-  if (payloadlen > 0) {
-    memcpy (ptr, payload, payloadlen);
-    ptr += payloadlen;
-    chksumlen += payloadlen;
+  // Copy UDP data to buf, if any.
+  if (udp_datalen > 0) {
+    memcpy (ptr, udp_data, udp_datalen);
+    ptr += udp_datalen;
+    chksumlen += udp_datalen;
   }
 
   // Pad to the next 16-bit boundary
-  if (payloadlen % 2) {
+  if (udp_datalen % 2) {
     *ptr = 0;
     chksumlen++;
   }

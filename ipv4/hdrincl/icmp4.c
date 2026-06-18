@@ -41,6 +41,7 @@
 #define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
+uint16_t icmp4_checksum (struct icmp, uint8_t *, int);
 uint16_t checksum (uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
@@ -48,13 +49,13 @@ uint8_t *allocate_ustrmem (int);
 int
 main (void) {
 
-  int status, datalen, sd, ip_flags[4] = {0}, datagram_length;
+  int status, icmp_datalen, sd, ip_flags[4] = {0}, datagram_length;
   ssize_t bytes;
   const int on = 1;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct icmp icmphdr;
-  uint8_t *data, *datagram;
+  uint8_t *icmpdata, *datagram;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4, sin;
   void *tmp;
@@ -63,7 +64,7 @@ main (void) {
   memset (&icmphdr, 0, sizeof (icmphdr));
 
   // Allocate memory for various arrays.
-  data = allocate_ustrmem (IP_MAXPACKET);
+  icmpdata = allocate_ustrmem (IP_MAXPACKET);
   datagram = allocate_ustrmem (IP_MAXPACKET);
   interface = allocate_strmem (IFNAMSIZ);
   target = allocate_strmem (TEXT_STRINGLEN);
@@ -103,11 +104,11 @@ main (void) {
   freeaddrinfo (res);
 
   // ICMP data
-  datalen = 4;
-  data[0] = 'T';
-  data[1] = 'e';
-  data[2] = 's';
-  data[3] = 't';
+  icmpdata[0] = (uint8_t) 'T';
+  icmpdata[1] = (uint8_t) 'e';
+  icmpdata[2] = (uint8_t) 's';
+  icmpdata[3] = (uint8_t) 't';
+  icmp_datalen = 4;
 
   // IPv4 header
 
@@ -121,7 +122,7 @@ main (void) {
   iphdr.ip_tos = 0;
 
   // Total length of datagram (16 bits): IP header + ICMP header + ICMP data
-  iphdr.ip_len = htons (IP4_HDRLEN + ICMP_HDRLEN + datalen);
+  iphdr.ip_len = htons (IP4_HDRLEN + ICMP_HDRLEN + icmp_datalen);
 
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
@@ -201,11 +202,11 @@ main (void) {
   memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN);
 
   // Finally, add the ICMP data.
-  memcpy (datagram + IP4_HDRLEN + ICMP_HDRLEN, data, datalen);
+  memcpy (datagram + IP4_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen);
 
   // ICMP header checksum (16 bits): set to 0 when calculating checksum
   // Already set to 0 above.
-  icmphdr.icmp_cksum = checksum ((uint8_t *) (datagram + IP4_HDRLEN), ICMP_HDRLEN + datalen);
+  icmphdr.icmp_cksum = icmp4_checksum (icmphdr, icmpdata, icmp_datalen);
   memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN);
 
   // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
@@ -238,7 +239,7 @@ main (void) {
   }
 
   // Send datagram to socket.
-  datagram_length = IP4_HDRLEN + ICMP_HDRLEN + datalen;
+  datagram_length = IP4_HDRLEN + ICMP_HDRLEN + icmp_datalen;
   bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &sin, sizeof (struct sockaddr));
   if (bytes == -1) {
     status = errno;
@@ -255,7 +256,7 @@ main (void) {
   close (sd);
 
   // Free allocated memory.
-  free (data);
+  free (icmpdata);
   free (datagram);
   free (interface);
   free (target);
@@ -299,6 +300,77 @@ checksum (uint8_t *addr, int len) {
   answer = ~sum;
 
   return (htons (answer));
+}
+
+// Build ICMP message and calculate ICMP checksum.
+uint16_t
+icmp4_checksum (struct icmp icmphdr, uint8_t *icmpdata, int icmp_datalen) {
+
+  int icmp_segment_len, chksumlen = 0;
+  uint8_t *buf, *ptr;
+  uint16_t answer = 0;
+
+  if (icmp_datalen < 0) {
+    fprintf (stderr, "ERROR: icmp_datalen must not be negative in icmp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  if ((icmp_datalen > 0) && (icmpdata == NULL)) {
+    fprintf (stderr, "ERROR: icmpdata is NULL but icmp_datalen > 0 in icmp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  icmp_segment_len = ICMP_HDRLEN + icmp_datalen;
+
+  // Allocate memory for buffer.
+  buf = allocate_ustrmem (icmp_segment_len + 1);  // Add 1 for possible padding.
+  ptr = &buf[0];  // ptr points to beginning of buffer buf
+
+  // Copy Message Type to buf (8 bits)
+  memcpy (ptr, &icmphdr.icmp_type, sizeof (icmphdr.icmp_type));
+  ptr += sizeof (icmphdr.icmp_type);
+  chksumlen += sizeof (icmphdr.icmp_type);
+
+  // Copy Message Code to buf (8 bits)
+  memcpy (ptr, &icmphdr.icmp_code, sizeof (icmphdr.icmp_code));
+  ptr += sizeof (icmphdr.icmp_code);
+  chksumlen += sizeof (icmphdr.icmp_code);
+
+  // Copy ICMP checksum to buf (16 bits)
+  // Zero, since we don't know it yet
+  *ptr = 0; ptr++;
+  *ptr = 0; ptr++;
+  chksumlen += 2;
+
+  // Copy Identifier to buf (16 bits)
+  memcpy (ptr, &icmphdr.icmp_id, sizeof (icmphdr.icmp_id));
+  ptr += sizeof (icmphdr.icmp_id);
+  chksumlen += sizeof (icmphdr.icmp_id);
+
+  // Copy Sequence Number to buf (16 bits)
+  memcpy (ptr, &icmphdr.icmp_seq, sizeof (icmphdr.icmp_seq));
+  ptr += sizeof (icmphdr.icmp_seq);
+  chksumlen += sizeof (icmphdr.icmp_seq);
+
+  // Copy ICMP data to buf, if any.
+  if (icmp_datalen > 0) {
+    memcpy (ptr, icmpdata, icmp_datalen);
+    ptr += icmp_datalen;
+    chksumlen += icmp_datalen;
+  }
+
+  // Pad to the next 16-bit boundary
+  if (icmp_datalen % 2) {
+    *ptr = 0;
+    chksumlen++;
+  }
+
+  answer = checksum ((uint8_t *) buf, chksumlen);
+
+  // Free allocated memory.
+  free (buf);
+
+  return (answer);
 }
 
 // Allocate memory for an array of chars.

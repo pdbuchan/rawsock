@@ -15,7 +15,7 @@
 */
 
 // Send an IPv4 TCP packet via raw socket at the link layer (ethernet frame)
-// with a large payload requiring fragmentation.
+// with a large amount of TCP data requiring fragmentation.
 // Need to have destination MAC address.
 
 #define __FAVOR_BSD           // Use BSD format of tcp header
@@ -56,14 +56,13 @@ int *allocate_intmem (int);
 int
 main (void) {
 
-  int i, n, status, frame_length, sd;
+  int i, n, status, frame_length, sd, tcp_datalen, bufferlen;
   int ip_flags[4] = {0}, tcp_flags[8] = {0}, mtu, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct tcphdr tcphdr;
-  int payloadlen, bufferlen;
-  uint8_t *payload, *buffer, *src_mac, *ether_frame;
+  uint8_t *tcp_data, *buffer, *src_mac, *ether_frame;
   uint32_t seq;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
@@ -82,7 +81,7 @@ main (void) {
   target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
-  payload = allocate_ustrmem (IP_MAXPACKET);
+  tcp_data = allocate_ustrmem (IP_MAXPACKET);
 
   // Random number seed
   srand ((unsigned) time (NULL));
@@ -189,16 +188,16 @@ main (void) {
       fprintf (stderr, "Payload too large.\n");
       exit (EXIT_FAILURE);
     }
-    payload[i] = n;
+    tcp_data[i] = n;
     i++;
   }
   fclose (fi);
-  payloadlen = i;
+  tcp_datalen = i;
   fprintf (stdout, "Upper layer protocol header length (bytes): %d\n", TCP_HDRLEN);
-  fprintf (stdout, "Payload length (bytes): %d\n", payloadlen);
+  fprintf (stdout, "Payload length (bytes): %d\n", tcp_datalen);
 
   // Length of fragmentable portion of packet.
-  bufferlen = TCP_HDRLEN + payloadlen;
+  bufferlen = TCP_HDRLEN + tcp_datalen;
   fprintf (stdout, "Total fragmentable data (bytes): %d\n", bufferlen);
 
   // Allocate memory for a buffer for fragmentable portion.
@@ -367,13 +366,13 @@ main (void) {
 
   // TCP checksum (16 bits)
   tcphdr.th_sum = 0;
-  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, payload, payloadlen);
+  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, tcp_data, tcp_datalen);
 
   // Build fragmentable portion of packet in buffer array.
   // TCP header
   memcpy (buffer, &tcphdr, TCP_HDRLEN);
   // TCP data
-  memcpy (buffer + TCP_HDRLEN, payload, payloadlen);
+  memcpy (buffer + TCP_HDRLEN, tcp_data, tcp_datalen);
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -457,7 +456,7 @@ main (void) {
   free (target);
   free (src_ip);
   free (dst_ip);
-  free (payload);
+  free (tcp_data);
   free (buffer);
 
   return (EXIT_SUCCESS);
@@ -500,10 +499,10 @@ checksum (uint8_t *addr, int len) {
 }
 
 // Build IPv4 TCP pseudo-header and call checksum function.
-// This version supports any combination of TCP options and TCP payload:
+// This version supports any combination of TCP options and TCP data:
 //   options == NULL and opt_len == 0        : no TCP options
-//   payload == NULL and payloadlen == 0     : no TCP payload
-//   options + payload                       : TCP options followed by TCP payload
+//   tcp_data == NULL and tcp_datalen == 0   : no TCP data
+//   options + tcp_data                      : TCP options followed by TCP data
 //
 // The caller must set tcphdr.th_off before calling this function.  th_off is
 // the TCP header length in 32-bit words, so it must include any TCP options.
@@ -514,7 +513,7 @@ checksum (uint8_t *addr, int len) {
 // function, because TCP options are part of the TCP header and the TCP header
 // length is measured in 32-bit words.
 uint16_t
-tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_len, uint8_t *payload, int payloadlen) {
+tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_len, uint8_t *tcp_data, int tcp_datalen) {
 
   int tcp_hdrlen, tcp_segment_len, chksumlen = 0;
   uint8_t *buf, *ptr, cvalue;
@@ -524,21 +523,21 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
     fprintf (stderr, "ERROR: opt_len must not be negative in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if (payloadlen < 0) {
-    fprintf (stderr, "ERROR: payloadlen must not be negative in tcp4_checksum().\n");
+  if (tcp_datalen < 0) {
+    fprintf (stderr, "ERROR: tcp_datalen must not be negative in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
   if ((opt_len > 0) && (options == NULL)) {
     fprintf (stderr, "ERROR: options is NULL but opt_len > 0 in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if ((payloadlen > 0) && (payload == NULL)) {
-    fprintf (stderr, "ERROR: payload is NULL but payloadlen > 0 in tcp4_checksum().\n");
+  if ((tcp_datalen > 0) && (tcp_data == NULL)) {
+    fprintf (stderr, "ERROR: tcp_data is NULL but tcp_datalen > 0 in tcp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
   tcp_hdrlen = tcphdr.th_off * 4;
-  tcp_segment_len = tcp_hdrlen + payloadlen;
+  tcp_segment_len = tcp_hdrlen + tcp_datalen;
 
   if (tcp_hdrlen < TCP_HDRLEN) {
     fprintf (stderr, "ERROR: TCP header length is too small in tcp4_checksum().\n");
@@ -576,7 +575,7 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
   ptr += sizeof (iphdr.ip_p);
   chksumlen += sizeof (iphdr.ip_p);
 
-  // Copy TCP length to buf (16 bits): TCP header + TCP payload.
+  // Copy TCP length to buf (16 bits): TCP header + TCP tcp_data.
   svalue = htons (tcp_segment_len);
   memcpy (ptr, &svalue, sizeof (svalue));
   ptr += sizeof (svalue);
@@ -631,18 +630,18 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
   chksumlen += sizeof (tcphdr.th_urp);
 
   // Copy TCP options to buf, if any. TCP options come immediately after
-  // the fixed 20-byte TCP header and before any TCP payload.
+  // the fixed 20-byte TCP header and before any TCP tcp_data.
   if (opt_len > 0) {
     memcpy (ptr, options, opt_len);
     ptr += opt_len;
     chksumlen += opt_len;
   }
 
-  // Copy TCP payload to buf, if any.
-  if (payloadlen > 0) {
-    memcpy (ptr, payload, payloadlen);
-    ptr += payloadlen;
-    chksumlen += payloadlen;
+  // Copy TCP data to buf, if any.
+  if (tcp_datalen > 0) {
+    memcpy (ptr, tcp_data, tcp_datalen);
+    ptr += tcp_datalen;
+    chksumlen += tcp_datalen;
   }
 
   // Pad to the next 16-bit boundary. The padding byte is used only for
