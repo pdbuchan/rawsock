@@ -86,7 +86,7 @@ main (void) {
   snprintf (url, TEXT_STRINGLEN, "%s", "www.google.com");  // Could be URL or IPv4 address
   snprintf (directory, TEXT_STRINGLEN, "/");
   snprintf (filename, TEXT_STRINGLEN, "filename");  // File we want to get
-  snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\n\r\n", directory, filename, url);
+  snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
   payloadlen = strnlen (payload, IP_MAXPACKET);
 
   // Interface to send datagram through.
