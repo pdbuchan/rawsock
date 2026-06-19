@@ -43,7 +43,7 @@
 #define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
-uint16_t icmp4_checksum (struct icmp, uint8_t *, int);
+uint16_t icmp4_checksum (uint8_t *, int);
 uint16_t checksum (uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
@@ -229,8 +229,8 @@ main (void) {
 
   // ICMP header checksum (16 bits): set to 0 when calculating checksum
   // Already set to 0 above.
-  icmphdr.icmp_cksum = icmp4_checksum (icmphdr, icmpdata, icmp_datalen);
-  memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);
+  icmphdr.icmp_cksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
+  memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
   // Open raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IP))) < 0) {
@@ -302,72 +302,49 @@ checksum (uint8_t *addr, int len) {
   return (htons (answer));
 }
 
-// Build ICMP message and calculate ICMP checksum.
+// Calculate IPv4 ICMP checksum.
+// Computes the ICMPv4 checksum over an arbitrary complete ICMP message:
+//
+//   ICMP header + ICMP data
+//
+// The IPv4 ICMP checksum does not require the composition of a pseudo-header.
+// The ICMP checksum field is always bytes 2 and 3 of the ICMP message.
+// This routine makes a private copy of the message, zeros those two bytes,
+// and computes the Internet checksum over the whole ICMP message.
+//
+// This makes the function suitable for Echo, Destination Unreachable,
+// Time Exceeded, Router Advertisement, Router Solicitation, and other
+// ICMPv4 message types, provided the caller supplies the complete ICMP
+// message exactly as it will appear after the IPv4 header.
+//   icmp_msg points to the beginning of the ICMP message, not the IPv4 header.
+//   icmp_len is the total ICMP message length: ICMP header + ICMP data.
 uint16_t
-icmp4_checksum (struct icmp icmphdr, uint8_t *icmpdata, int icmp_datalen) {
+icmp4_checksum (uint8_t *icmp_msg, int icmp_len) {
 
-  int icmp_segment_len, chksumlen = 0;
-  uint8_t *buf, *ptr;
-  uint16_t answer = 0;
+  uint8_t *buf;
+  uint16_t answer;
 
-  if (icmp_datalen < 0) {
-    fprintf (stderr, "ERROR: icmp_datalen must not be negative in icmp4_checksum().\n");
+  if (icmp_len < 4) {
+    fprintf (stderr, "ERROR: icmp_len must be at least 4 bytes in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  if ((icmp_datalen > 0) && (icmpdata == NULL)) {
-    fprintf (stderr, "ERROR: icmpdata is NULL but icmp_datalen > 0 in icmp4_checksum().\n");
+  if (icmp_msg == NULL) {
+    fprintf (stderr, "ERROR: icmp_msg is NULL in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  icmp_segment_len = ICMP_HDRLEN + icmp_datalen;
+  buf = allocate_ustrmem (icmp_len);
 
-  // Allocate memory for buffer.
-  buf = allocate_ustrmem (icmp_segment_len + 1);  // Add 1 for possible padding.
-  ptr = &buf[0];  // ptr points to beginning of buffer buf
+  memcpy (buf, icmp_msg, icmp_len);
 
-  // Copy Message Type to buf (8 bits)
-  memcpy (ptr, &icmphdr.icmp_type, sizeof (icmphdr.icmp_type));
-  ptr += sizeof (icmphdr.icmp_type);
-  chksumlen += sizeof (icmphdr.icmp_type);
+  // ICMP checksum field is bytes 2 and 3 of the ICMP message.
+  // Set to zero for checksum calculation.
+  buf[2] = 0;
+  buf[3] = 0;
 
-  // Copy Message Code to buf (8 bits)
-  memcpy (ptr, &icmphdr.icmp_code, sizeof (icmphdr.icmp_code));
-  ptr += sizeof (icmphdr.icmp_code);
-  chksumlen += sizeof (icmphdr.icmp_code);
+  answer = checksum (buf, icmp_len);
 
-  // Copy ICMP checksum to buf (16 bits)
-  // Zero, since we don't know it yet
-  *ptr = 0; ptr++;
-  *ptr = 0; ptr++;
-  chksumlen += 2;
-
-  // Copy Identifier to buf (16 bits)
-  memcpy (ptr, &icmphdr.icmp_id, sizeof (icmphdr.icmp_id));
-  ptr += sizeof (icmphdr.icmp_id);
-  chksumlen += sizeof (icmphdr.icmp_id);
-
-  // Copy Sequence Number to buf (16 bits)
-  memcpy (ptr, &icmphdr.icmp_seq, sizeof (icmphdr.icmp_seq));
-  ptr += sizeof (icmphdr.icmp_seq);
-  chksumlen += sizeof (icmphdr.icmp_seq);
-
-  // Copy ICMP data to buf, if any.
-  if (icmp_datalen > 0) {
-    memcpy (ptr, icmpdata, icmp_datalen);
-    ptr += icmp_datalen;
-    chksumlen += icmp_datalen;
-  }
-
-  // Pad to the next 16-bit boundary
-  if (icmp_datalen % 2) {
-    *ptr = 0;
-    chksumlen++;
-  }
-
-  answer = checksum ((uint8_t *) buf, chksumlen);
-
-  // Free allocated memory.
   free (buf);
 
   return (answer);
