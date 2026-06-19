@@ -17,6 +17,8 @@
 // Send an IPv4 ARP packet via raw socket at the link layer (ethernet frame) and
 // receive ARP reply.
 
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -37,8 +39,7 @@
 #include <errno.h>            // errno, perror()
 
 // Define a struct for ARP header
-typedef struct _arp_hdr arp_hdr;
-struct _arp_hdr {
+typedef struct {
   uint16_t htype;
   uint16_t ptype;
   uint8_t hlen;
@@ -48,7 +49,7 @@ struct _arp_hdr {
   uint8_t sender_ip[4];
   uint8_t target_mac[6];
   uint8_t target_ip[4];
-};
+} ARP_HDR;
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN  // Ethernet header length
@@ -68,7 +69,7 @@ main (void) {
   int i, n, status, frame_length, sd, sendsd, recvsd, timeout;
   ssize_t bytes;
   char *interface, *target, *src_ip;
-  arp_hdr send_arphdr, *recv_arphdr;
+  ARP_HDR send_arphdr, *recv_arphdr;
   uint8_t *src_mac, *dst_mac, *ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
@@ -289,7 +290,7 @@ main (void) {
   pfd.fd = recvsd;
   pfd.events = POLLIN;
   memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
-  recv_arphdr = (arp_hdr *) (ether_frame + ETH_HDRLEN);
+  recv_arphdr = (ARP_HDR *) (ether_frame + ETH_HDRLEN);
   for (;;) {
     status = poll (&pfd, 1, timeout);
     if (status < 0) {
@@ -323,7 +324,7 @@ main (void) {
 
       // Ensure we have an ARP reply with correct source and destination IP addresses, and 
       // this node's MAC address.
-      recv_arphdr = (arp_hdr *) (ether_frame + ETH_HDRLEN);
+      recv_arphdr = (ARP_HDR *) (ether_frame + ETH_HDRLEN);
       if (((((ether_frame[12]) << 8) + ether_frame[13]) == ETH_P_ARP) &&
         (ntohs (recv_arphdr->htype) == 1) &&
         (ntohs (recv_arphdr->ptype) == ETH_P_IP) &&

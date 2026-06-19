@@ -17,7 +17,8 @@
 // Send a "cooked" IPv4 HTTP GET packet via raw socket.
 // Need to specify destination MAC address.
 
-#define __FAVOR_BSD           // Use BSD format of tcp header
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()

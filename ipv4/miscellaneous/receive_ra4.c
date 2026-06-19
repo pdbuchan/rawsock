@@ -17,6 +17,8 @@
 // Receive an IPv4 router advertisement and extract
 // various information stored in the ethernet frame.
 
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -34,17 +36,15 @@
 
 #include <errno.h>            // errno, perror()
 
-// Define a struct for an IPv4 ICMP router advertisement header
-typedef struct _ra_hdr ra_hdr;
-struct _ra_hdr {
-  uint8_t icmp_type;
-  uint8_t icmp_code;
-  uint16_t icmp_cksum;
+// ICMP header for Router Advertisement
+typedef struct {
+  uint8_t type;
+  uint8_t code;
+  uint16_t checksum;
   uint8_t num_addrs;
   uint8_t entry_size;
   uint16_t lifetime;
-  uint8_t addrs[2040];
-};
+} ICMP_HDR;
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN  // Ethernet header length

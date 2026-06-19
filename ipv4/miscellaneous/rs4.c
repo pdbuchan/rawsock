@@ -17,6 +17,8 @@
 // Send an IPv4 router solicitation packet via raw socket.
 // Stack fills out layer 2 (data link) information (MAC addresses) for us.
 
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -34,14 +36,13 @@
 
 #include <errno.h>            // errno, perror()
 
-// Define a struct for an IPv4 ICMP router solicitation header
-typedef struct _rs_hdr rs_hdr;
-struct _rs_hdr {
-  uint8_t icmp_type;
-  uint8_t icmp_code;
-  uint16_t icmp_cksum;
-  uint8_t icmp_reserved[4];
-};
+// ICMP header for Router Solicitation
+typedef struct {
+  uint8_t type;
+  uint8_t code;
+  uint16_t checksum;
+  uint8_t reserved[4];
+} ICMP_HDR;
 
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length
@@ -50,6 +51,7 @@ struct _rs_hdr {
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
+uint16_t icmp4_checksum (uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
@@ -59,21 +61,18 @@ main (void) {
   int status, sd, ip_flags[4] = {0}, datagram_length;
   ssize_t bytes;
   const int on = 1;
-  char *interface, *target, *src_ip, *dst_ip;
+  char *interface, *src_ip, *dst_ip;
   struct ip iphdr;
-  rs_hdr rshdr;
+  ICMP_HDR icmphdr;
   uint8_t *datagram;
-  struct addrinfo hints, *res;
-  struct sockaddr_in *ipv4, sin;
-  void *tmp;
+  struct sockaddr_in sin;
 
   memset (&iphdr, 0, sizeof (iphdr));
-  memset (&rshdr, 0, sizeof (rshdr));
+  memset (&icmphdr, 0, sizeof (icmphdr));
 
   // Allocate memory for various arrays.
   datagram = allocate_ustrmem (IP_MAXPACKET);
   interface = allocate_strmem (IFNAMSIZ);
-  target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
 
@@ -88,28 +87,8 @@ main (void) {
 
   // Destination IPv4 address ("all routers" router solicitation multicast address)
   // If local network does not support multicast, use broadcast address 255.255.255.255 instead.
-  snprintf (target, INET_ADDRSTRLEN, "%s", "224.0.0.2");
-//  snprintf (target, INET_ADDRSTRLEN, "%s", "255.255.255.255");
-
-  // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = 0;  // Address resolution only; any socket type.
-  hints.ai_flags = hints.ai_flags | AI_CANONNAME;
-
-  // Resolve target using getaddrinfo().
-  if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
-    fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
-    exit (EXIT_FAILURE);
-  }
-  ipv4 = (struct sockaddr_in *) res->ai_addr;
-  tmp = &(ipv4->sin_addr);
-  if (inet_ntop (AF_INET, tmp, dst_ip, INET_ADDRSTRLEN) == NULL) {
-    status = errno;
-    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
-    exit (EXIT_FAILURE);
-  }
-  freeaddrinfo (res);
+  snprintf (dst_ip, INET_ADDRSTRLEN, "%s", "224.0.0.2");
+//  snprintf (dst_ip, INET_ADDRSTRLEN, "%s", "255.255.255.255");
 
   // IPv4 header
 
@@ -153,7 +132,7 @@ main (void) {
   // Transport layer protocol (8 bits): 1 for ICMP
   iphdr.ip_p = IPPROTO_ICMP;
 
-  // Source IPv4 address (32 bits)
+  // Source IPv4 address (32 bits): Convert from presentation to network format.
   if ((status = inet_pton (AF_INET, src_ip, &(iphdr.ip_src))) != 1) {
     if (status == 0) {
       fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
@@ -163,7 +142,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Destination IPv4 address (32 bits)
+  // Destination IPv4 address (32 bits): Convert from presentation to network format.
   if ((status = inet_pton (AF_INET, dst_ip, &(iphdr.ip_dst))) != 1) {
     if (status == 0) {
       fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
@@ -179,30 +158,28 @@ main (void) {
 
   // ICMP header
 
-  // Message Type (8 bits): router solicitation
-  rshdr.icmp_type = ICMP_ROUTERSOLICIT;
+  // Message Type (8 bits): Router Solicitation
+  icmphdr.type = ICMP_ROUTERSOLICIT;
 
   // Message Code (8 bits): see RFC 1256
-  rshdr.icmp_code = 0;
+  icmphdr.code = 0;
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
-  rshdr.icmp_cksum = 0;
-
-  // Reserved (32 bits): set to zero
-  memset (&rshdr.icmp_reserved, 0, sizeof (uint32_t));
+  // Reserved (32 bits): Set to 0.
+  memset (icmphdr.reserved, 0, sizeof (icmphdr.reserved));
 
   // Prepare datagram.
 
   // First part is an IPv4 header.
   memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
 
-  // Next part of datagram is upper layer protocol header.
-  memcpy ((datagram + IP4_HDRLEN), &rshdr, ICMP_HDRLEN * sizeof (uint8_t));
+  // Next part of datagram is ICMP header.
+  memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
-  rshdr.icmp_cksum = checksum ((uint8_t *) (datagram + IP4_HDRLEN), ICMP_HDRLEN);
-  memcpy ((datagram + IP4_HDRLEN), &rshdr, ICMP_HDRLEN * sizeof (uint8_t));
+  icmphdr.checksum = 0;
+  icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN);
+  memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
 
   // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it
@@ -244,7 +221,7 @@ main (void) {
 
   // Send datagram to socket.
   datagram_length = IP4_HDRLEN + ICMP_HDRLEN;
-  bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &sin, sizeof (struct sockaddr));
+  bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &sin, sizeof (sin));
   if (bytes == -1) {
     status = errno;
     fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
@@ -262,7 +239,6 @@ main (void) {
   // Free allocated memory.
   free (datagram);
   free (interface);
-  free (target);
   free (src_ip);
   free (dst_ip);
 
@@ -303,6 +279,54 @@ checksum (uint8_t *addr, int len) {
   answer = ~sum;
 
   return (htons (answer));
+}
+
+// Calculate IPv4 ICMP checksum.
+// Computes the ICMPv4 checksum over an arbitrary complete ICMP message:
+//
+//   ICMP header + ICMP data
+//
+// The IPv4 ICMP checksum does not require the composition of a pseudo-header.
+// The ICMP checksum field is always bytes 2 and 3 of the ICMP message.
+// This routine makes a private copy of the message, zeros those two bytes,
+// and computes the Internet checksum over the whole ICMP message.
+//
+// This makes the function suitable for Echo, Destination Unreachable,
+// Time Exceeded, Router Advertisement, Router Solicitation, and other
+// ICMPv4 message types, provided the caller supplies the complete ICMP
+// message exactly as it will appear after the IPv4 header.
+//   icmp_msg points to the beginning of the ICMP message, not the IPv4 header.
+//   icmp_len is the total ICMP message length: ICMP header + ICMP data.
+uint16_t
+icmp4_checksum (uint8_t *icmp_msg, int icmp_len) {
+
+  uint8_t *buf;
+  uint16_t answer;
+
+  if (icmp_len < 4) {
+    fprintf (stderr, "ERROR: icmp_len must be at least 4 bytes in icmp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  if (icmp_msg == NULL) {
+    fprintf (stderr, "ERROR: icmp_msg is NULL in icmp4_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  buf = allocate_ustrmem (icmp_len);
+
+  memcpy (buf, icmp_msg, icmp_len);
+
+  // ICMP checksum field is bytes 2 and 3 of the ICMP message.
+  // Set to zero for checksum calculation.
+  buf[2] = 0;
+  buf[3] = 0;
+
+  answer = checksum (buf, icmp_len);
+
+  free (buf);
+
+  return (answer);
 }
 
 // Allocate memory for an array of chars.

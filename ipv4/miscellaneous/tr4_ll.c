@@ -19,7 +19,8 @@
 // Need to have destination MAC address.
 // TCP set for SYN, UDP for port unreachable, ICMP for echo request (ping).
 
-#define __FAVOR_BSD           // Use BSD format of TCP header and UDP header
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
