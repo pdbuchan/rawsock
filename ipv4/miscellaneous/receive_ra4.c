@@ -59,14 +59,14 @@ uint8_t *allocate_ustrmem (int);
 int
 main (void) {
 
-  int i, offset, sd, status, iphdrlen, ip_total_len, naddrs, entry_size, timeout;
+  int i, offset, sd, status, iphdrlen, ip_total_len, timeout;
   ssize_t bytes;
   uint32_t preference;
   struct timespec start, now;
   struct pollfd pfd;
   uint8_t *ether_frame;
   struct ip *iphdr;
-  ra_hdr *rahdr;
+  ICMP_HDR *icmphdr;
   char *src_ip, *dst_ip;
 
   // Allocate memory for various arrays.
@@ -106,7 +106,7 @@ main (void) {
     status = poll (&pfd, 1, timeout);
     if (status < 0) {
       if (errno == EINTR) {
-        continue;  // Something weird happened, but let's try again.
+        continue;  // System call interrupted by a signal before completion. Retry.
       } else {
         fprintf (stderr, "poll() failed.\nError message: %s\n", strerror (errno));
         exit (EXIT_FAILURE);
@@ -126,7 +126,7 @@ main (void) {
       memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
       if ((bytes = recv (sd, ether_frame, ETH_HDRLEN + IP_MAXPACKET, 0)) < 0) {
         if (errno == EINTR) {
-          continue;  // Something weird happened, but let's try again.
+          continue;  // System call interrupted by a signal before completion. Retry.
         } else {
           perror ("recv() failed:");
           exit (EXIT_FAILURE);
@@ -161,23 +161,23 @@ main (void) {
         continue;
       }
 
-      // Ensure we have a router advertisement.
-      rahdr = (ra_hdr *) (ether_frame + ETH_HDRLEN + iphdrlen);
-      if (rahdr->icmp_type != ICMP_ROUTERADVERT) {
+      // Ensure we have a Router Advertisement.
+      icmphdr = (ICMP_HDR *) (ether_frame + ETH_HDRLEN + iphdrlen);
+      if (icmphdr->type != ICMP_ROUTERADVERT) {
         continue;
       }
-      if (rahdr->icmp_code != 0) {
+      if (icmphdr->code != 0) {
         continue;
       }
 
-      // Ensure valid router address entry size (units of 32-bit words).
-      if (rahdr->entry_size < 2) {
+      // Ensure valid Address Entry Size (units of 32-bit words); Must be 2.
+      if (icmphdr->entry_size != 2) {
         continue;
       }
 
       // Ensure IPv4 total length and received bytes are consistent with number of
-      // addresses the RA header claims.
-      if ((ip_total_len < (iphdrlen + ICMP_HDRLEN + (rahdr->num_addrs * rahdr->entry_size * 4))) ||
+      // addresses the Router Advertisement claims.
+      if ((ip_total_len < (iphdrlen + ICMP_HDRLEN + (icmphdr->num_addrs * icmphdr->entry_size * 4))) ||
           (bytes < (ETH_HDRLEN + ip_total_len))) {
         continue;
       }
@@ -189,7 +189,7 @@ main (void) {
   // Print out contents of received ethernet frame.
   fprintf (stdout, "\nRECEIVED ETHERNET FRAME\n");
   fprintf (stdout, "  Ethernet frame header:\n");
-  fprintf (stdout, "    Destination MAC address (this node): ");
+  fprintf (stdout, "    Destination MAC address (expect 01:00:5e:00:00:01 associated with IPv4 all-devices multi-cast address): ");
   for (i = 0; i < 6; i++) {
     fprintf (stdout, "%02x%s", ether_frame[i], (i < 5) ? ":" : "\n");
   }
@@ -199,9 +199,9 @@ main (void) {
   }
   // Next is ethernet type code (ETH_P_IP for IPv4 packets).
   // http://www.iana.org/assignments/ethernet-numbers
-  fprintf (stdout, "  Ethernet type code (2048 = IPv4): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
+  fprintf (stdout, "    Ethernet type code (2048 = IPv4): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
 
-  fprintf (stdout, "  Router Advertisement header\n");
+  fprintf (stdout, "  IPv4 header\n");
   fprintf (stdout, "    IPv4 transport layer protocol (1 = ICMP): %u\n", iphdr->ip_p);
   if (inet_ntop (AF_INET, &(iphdr->ip_src), src_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
@@ -214,16 +214,15 @@ main (void) {
     fprintf (stderr, "inet_ntop() failed for received destination address.\nError message: %s", strerror (status));
     exit (EXIT_FAILURE);
   }
-  fprintf (stdout, "    Destination IPv4 address: %s\n", dst_ip);
-  fprintf (stdout, "    ICMP message type (9 = router advertisement): %u\n", rahdr->icmp_type);
-  fprintf (stdout, "    ICMP message code: %u\n", rahdr->icmp_code);
-  fprintf (stdout, "    Router address entry size (in units of 32-bit words): %u\n", rahdr->entry_size);
-  fprintf (stdout, "    Lifetime of validity of router advertisement (seconds): %u\n", ntohs (rahdr->lifetime));
-  fprintf (stdout, "    Number of IPv4 addresses associated with router: %u\n", rahdr->num_addrs);
+  fprintf (stdout, "    Destination IPv4 address (expect IPv4 all-devices multi-cast address 224.0.0.1): %s\n\n", dst_ip);
+  fprintf (stdout, "  ICMP Message (Router Advertisement)\n");
+  fprintf (stdout, "    ICMP message type (9 = Router Advertisement): %u\n", icmphdr->type);
+  fprintf (stdout, "    ICMP message code: %u\n", icmphdr->code);
+  fprintf (stdout, "    Router address entry size (in units of 32-bit words): %u\n", icmphdr->entry_size);
+  fprintf (stdout, "    Lifetime of validity of Router Advertisement (seconds): %u\n", ntohs (icmphdr->lifetime));
+  fprintf (stdout, "    Number of IPv4 addresses associated with router: %u\n", icmphdr->num_addrs);
   offset = ETH_HDRLEN + iphdrlen + ICMP_HDRLEN;  // Start of list of addresses and preference levels within ethernet frame
-  naddrs = rahdr->num_addrs;
-  entry_size = rahdr->entry_size * 4;
-  for (i = 0; i < naddrs; i++) {
+  for (i = 0; i < icmphdr->num_addrs; i++) {
     fprintf (stdout, "      Router %d IPv4 address: %u.%u.%u.%u\n",
      i, ether_frame[offset + 0],
         ether_frame[offset + 1],
@@ -231,7 +230,7 @@ main (void) {
         ether_frame[offset + 3]);
     memcpy (&preference, ether_frame + offset + 4, sizeof (preference));
     fprintf (stdout, "      Router %d preference level: %d\n", i, (int32_t) ntohl (preference));
-    offset += entry_size;
+    offset += (icmphdr->entry_size * 4);
   }
 
   free (ether_frame);

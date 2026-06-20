@@ -432,7 +432,7 @@ main (void) {
         if (bytes < 0) {
           status = errno;
           if ((status == EINTR) || (status == EAGAIN) || (status == EWOULDBLOCK)) {  // EINTR = 4
-            continue;  // Something weird happened, but let's keep listening.
+            continue;  // System call interrupted by a signal before completion. Retry.
           } else {
             fprintf (stderr, "recvfrom() failed. Error message: %s\n", strerror (status));
             exit (EXIT_FAILURE);

@@ -295,7 +295,7 @@ main (void) {
     status = poll (&pfd, 1, timeout);
     if (status < 0) {
       if (errno == EINTR) {
-        continue;  // Something weird happened, but let's try again.
+        continue;  // System call interrupted by a signal before completion. Retry.
       } else {
         fprintf (stderr, "poll() failed.\nError message: %s\n", strerror (errno));
         exit (EXIT_FAILURE);
@@ -310,7 +310,7 @@ main (void) {
       memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
       if ((bytes = recv (recvsd, ether_frame, ETH_HDRLEN + ARP_ETH_IPV4_LEN, 0)) < 0) {
         if (errno == EINTR) {
-          continue;  // Something weird happened, but let's try again.
+          continue;  // System call interrupted by a signal before completion. Retry.
         } else {
           fprintf (stderr, "recv() failed.\nError message: %s\n", strerror (errno));
           exit (EXIT_FAILURE);
