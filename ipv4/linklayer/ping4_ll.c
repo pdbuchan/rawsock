@@ -125,8 +125,7 @@ main (void) {
   }
 
   // Set destination MAC address: you need to fill these out
-  uint8_t dst_mac[6] = {0x0c, 0x9d, 0x92, 0x02, 0x58, 0x58};
-//  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
