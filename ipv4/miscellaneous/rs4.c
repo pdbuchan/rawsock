@@ -173,11 +173,11 @@ main (void) {
   memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
 
   // Next part of datagram is ICMP header.
+  icmphdr.checksum = 0;  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
-  icmphdr.checksum = 0;
   icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN);
   memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
 

@@ -214,8 +214,13 @@ main (void) {
   // Lifetime of validity for this advertisement in seconds (16 bits): Typical value used here.
   icmphdr.lifetime = htons (1800);
 
-  // Compose datagram: IPv4 header + ICMP message (Router Advertisement)
+  // Compose datagram
+
+  // IPv4 header
   memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));  // IPv4 header
+
+  // ICMP message (Router Advertisement)
+  icmphdr.checksum = 0;  // IPv4 header checksum (16 bits): Set to 0 for checksum calculation.
   memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // ICMP header
   icmp_msglen = ICMP_HDRLEN;
   for (i = 0; i < (int) icmphdr.num_addrs; i++) {
@@ -231,7 +236,7 @@ main (void) {
   memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));  // Save IPv4 header with checksum to datagram.
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
-  icmphdr.checksum = 0;
+  // Already set to 0 above.
   icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, icmp_msglen);
   memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // Save ICMP header with checksum to datagram.
 

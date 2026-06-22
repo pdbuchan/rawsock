@@ -236,7 +236,7 @@ main (void) {
   // Message Type (8 bits): echo request
   icmphdr.icmp_type = ICMP_ECHO;
 
-  // Message Code (8 bits): 0 for echo request
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
   icmphdr.icmp_code = 0;
 
   // Identifier (16 bits): usually pid of sending process - pick a number
@@ -245,7 +245,7 @@ main (void) {
   // Sequence Number (16 bits): starts at 0
   icmphdr.icmp_seq = htons (0);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   icmphdr.icmp_cksum = 0;
 
   // Build ICMP message for ICMP checksum calculation.
@@ -253,7 +253,8 @@ main (void) {
   memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
   memcpy (icmp_msg + ICMP_HDRLEN, icmpdata, icmp_datalen * sizeof (uint8_t));
 
-  // ICMP header checksum (16 bits)
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
+  // Already set to 0 above.
   icmphdr.icmp_cksum = icmp4_checksum (icmp_msg, ICMP_HDRLEN + icmp_datalen);
   memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 

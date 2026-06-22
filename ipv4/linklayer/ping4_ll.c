@@ -50,20 +50,20 @@
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
-uint16_t icmp4_checksum (struct icmp, uint8_t *, int);
+uint16_t icmp4_checksum (uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
 int
 main (void) {
 
-  int i, n, status, datalen, sd, sendsd, recvsd, ip_flags[4] = {0}, frame_length, done;
-  int iphlen, timeout_ms, trylim, trycount;
+  int i, n, status, icmp_datalen, sd, sendsd, recvsd, ip_flags[4] = {0}, frame_length, done;
+  int iphlen, ip_total_len, timeout_ms, trylim, trycount;
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip, *rec_ip;
   struct ip send_iphdr, *recv_iphdr;
   struct icmp send_icmphdr, *recv_icmphdr;
-  uint8_t *data, *src_mac, *send_ether_frame, *recv_ether_frame;
+  uint8_t *icmpdata, *src_mac, *send_ether_frame, *recv_ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device, from;
@@ -79,7 +79,7 @@ main (void) {
 
   // Allocate memory for various arrays.
   src_mac = allocate_ustrmem (6);
-  data = allocate_ustrmem (IP_MAXPACKET);
+  icmpdata = allocate_ustrmem (IP_MAXPACKET);
   send_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   recv_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
@@ -125,7 +125,8 @@ main (void) {
   }
 
   // Set destination MAC address: you need to fill these out
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[6] = {0x0c, 0x9d, 0x92, 0x02, 0x58, 0x58};
+//  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
@@ -167,11 +168,11 @@ main (void) {
   device.sll_halen = 6;
 
   // ICMP data
-  datalen = 4;
-  data[0] = 'T';
-  data[1] = 'e';
-  data[2] = 's';
-  data[3] = 't';
+  icmpdata[0] = (uint8_t) 'T';
+  icmpdata[1] = (uint8_t) 'e';
+  icmpdata[2] = (uint8_t) 's';
+  icmpdata[3] = (uint8_t) 't';
+  icmp_datalen = 4;
 
   // IPv4 header
 
@@ -185,7 +186,7 @@ main (void) {
   send_iphdr.ip_tos = 0;
 
   // Total length of datagram (16 bits): IP header + ICMP header + ICMP data
-  send_iphdr.ip_len = htons (IP4_HDRLEN + ICMP_HDRLEN + datalen);
+  send_iphdr.ip_len = htons (IP4_HDRLEN + ICMP_HDRLEN + icmp_datalen);
 
   // IPv4 Identification field (16 bits)
   send_iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
@@ -244,22 +245,22 @@ main (void) {
   // Message Type (8 bits): echo request
   send_icmphdr.icmp_type = ICMP_ECHO;
 
-  // Message Code (8 bits): 0 for echo request
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
   send_icmphdr.icmp_code = 0;
 
-  // Identifier (16 bits): usually pid of sending process - pick a number
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum
+  send_icmphdr.icmp_cksum = 0;
+
+  // Identifier (16 bits): Usually pid of sending process; pick a number.
   send_icmphdr.icmp_id = htons (1000);
 
-  // Sequence Number (16 bits): starts at 0
+  // Sequence Number (16 bits): Starts at 0.
   send_icmphdr.icmp_seq = htons (0);
-
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
-  send_icmphdr.icmp_cksum = icmp4_checksum (send_icmphdr, data, datalen);
 
   // Fill out ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + ICMP header + ICMP data)
-  frame_length = ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN + datalen;
+  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet frame data (IP header + ICMP header + ICMP data)
+  frame_length = ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN + icmp_datalen;
 
   // Destination and Source MAC addresses
   memcpy (send_ether_frame, dst_mac, 6);
@@ -279,7 +280,12 @@ main (void) {
   memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN);
 
   // ICMP data
-  memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN, data, datalen);
+  memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen);
+
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum
+  // Already set to 0 above.
+  send_icmphdr.icmp_cksum = icmp4_checksum (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
+  memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // Save ICMP header with checksum to datagram.
 
   // Submit request for a raw socket descriptor to send packets.
   if ((sendsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -309,10 +315,9 @@ main (void) {
     // This prevents a delayed reply from an earlier attempt from matching a later attempt.
     send_icmphdr.icmp_seq = htons (trycount);
     send_icmphdr.icmp_cksum = 0;
-    send_icmphdr.icmp_cksum = icmp4_checksum (send_icmphdr, data, datalen);
-
-    // Copy updated ICMP header into ethernet frame.
     memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN);
+    send_icmphdr.icmp_cksum = icmp4_checksum (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
+    memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // Save ICMP header with checksum to datagram.
 
     // Send ethernet frame to socket.
     bytes = sendto (sendsd, send_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
@@ -422,10 +427,12 @@ main (void) {
       iphlen = recv_iphdr->ip_hl * 4;  // Convert to bytes; IPv4 header length is expressed in 32-bit words.
       if ((bytes < (ETH_HDRLEN + iphlen)) || (bytes < (ETH_HDRLEN + (int) sizeof (struct ip)))) continue;
       if ((recv_iphdr->ip_p == IPPROTO_ICMP) && (bytes < ETH_HDRLEN + iphlen + ICMP_HDRLEN)) continue;
+      ip_total_len = ntohs (recv_iphdr->ip_len);
+      if (ip_total_len < iphlen + ICMP_HDRLEN) continue;
+      if (bytes < ETH_HDRLEN + ip_total_len) continue;
 
       // Determine offsets to ICMP header.
       recv_icmphdr = (struct icmp *) (recv_ether_frame + ETH_HDRLEN + iphlen);
-
 
       // Check for an IP ethernet frame, carrying ICMP echo reply. If not, ignore and keep listening.
       // Make sure it's an ICMP ECHOREPLY with code 0, and match ID, Sequence #, source and destination addresses.
@@ -445,7 +452,7 @@ main (void) {
         if (remaining < 0) remaining = 0;
 
         // Extract source IP address from received ethernet frame.
-        if (inet_ntop (AF_INET, &(recv_iphdr->ip_src.s_addr), rec_ip, INET_ADDRSTRLEN) == NULL) {
+        if (inet_ntop (AF_INET, &(recv_iphdr->ip_src), rec_ip, INET_ADDRSTRLEN) == NULL) {
           status = errno;
           fprintf (stderr, "inet_ntop() failed.\nError message: %s", strerror (status));
           exit (EXIT_FAILURE);
@@ -477,7 +484,7 @@ main (void) {
 
   // Free allocated memory.
   free (src_mac);
-  free (data);
+  free (icmpdata);
   free (send_ether_frame);
   free (recv_ether_frame);
   free (interface);
@@ -525,72 +532,49 @@ checksum (uint8_t *addr, int len) {
   return (htons (answer));
 }
 
-// Build ICMP message and calculate ICMP checksum.
+// Calculate IPv4 ICMP checksum.
+// Computes the ICMPv4 checksum over an arbitrary complete ICMP message:
+//
+//   ICMP header + ICMP data
+//
+// The IPv4 ICMP checksum does not require the composition of a pseudo-header.
+// The ICMP checksum field is always bytes 2 and 3 of the ICMP message.
+// This routine makes a private copy of the message, zeros those two bytes,
+// and computes the Internet checksum over the whole ICMP message.
+//
+// This makes the function suitable for Echo, Destination Unreachable,
+// Time Exceeded, Router Advertisement, Router Solicitation, and other
+// ICMPv4 message types, provided the caller supplies the complete ICMP
+// message exactly as it will appear after the IPv4 header.
+//   icmp_msg points to the beginning of the ICMP message, not the IPv4 header.
+//   icmp_len is the total ICMP message length: ICMP header + ICMP data.
 uint16_t
-icmp4_checksum (struct icmp icmphdr, uint8_t *icmpdata, int icmp_datalen) {
+icmp4_checksum (uint8_t *icmp_msg, int icmp_len) {
 
-  int icmp_segment_len, chksumlen = 0;
-  uint8_t *buf, *ptr;
-  uint16_t answer = 0;
+  uint8_t *buf;
+  uint16_t answer;
 
-  if (icmp_datalen < 0) {
-    fprintf (stderr, "ERROR: icmp_datalen must not be negative in icmp4_checksum().\n");
+  if (icmp_len < 4) {
+    fprintf (stderr, "ERROR: icmp_len must be at least 4 bytes in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  if ((icmp_datalen > 0) && (icmpdata == NULL)) {
-    fprintf (stderr, "ERROR: icmpdata is NULL but icmp_datalen > 0 in icmp4_checksum().\n");
+  if (icmp_msg == NULL) {
+    fprintf (stderr, "ERROR: icmp_msg is NULL in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 
-  icmp_segment_len = ICMP_HDRLEN + icmp_datalen;
+  buf = allocate_ustrmem (icmp_len);
 
-  // Allocate memory for buffer.
-  buf = allocate_ustrmem (icmp_segment_len + 1);  // Add 1 for possible padding.
-  ptr = &buf[0];  // ptr points to beginning of buffer buf
+  memcpy (buf, icmp_msg, icmp_len);
 
-  // Copy Message Type to buf (8 bits)
-  memcpy (ptr, &icmphdr.icmp_type, sizeof (icmphdr.icmp_type));
-  ptr += sizeof (icmphdr.icmp_type);
-  chksumlen += sizeof (icmphdr.icmp_type);
+  // ICMP checksum field is bytes 2 and 3 of the ICMP message.
+  // Set to zero for checksum calculation.
+  buf[2] = 0;
+  buf[3] = 0;
 
-  // Copy Message Code to buf (8 bits)
-  memcpy (ptr, &icmphdr.icmp_code, sizeof (icmphdr.icmp_code));
-  ptr += sizeof (icmphdr.icmp_code);
-  chksumlen += sizeof (icmphdr.icmp_code);
+  answer = checksum (buf, icmp_len);
 
-  // Copy ICMP checksum to buf (16 bits)
-  // Zero, since we don't know it yet
-  *ptr = 0; ptr++;
-  *ptr = 0; ptr++;
-  chksumlen += 2;
-
-  // Copy Identifier to buf (16 bits)
-  memcpy (ptr, &icmphdr.icmp_id, sizeof (icmphdr.icmp_id));
-  ptr += sizeof (icmphdr.icmp_id);
-  chksumlen += sizeof (icmphdr.icmp_id);
-
-  // Copy Sequence Number to buf (16 bits)
-  memcpy (ptr, &icmphdr.icmp_seq, sizeof (icmphdr.icmp_seq));
-  ptr += sizeof (icmphdr.icmp_seq);
-  chksumlen += sizeof (icmphdr.icmp_seq);
-
-  // Copy ICMP data to buf, if any.
-  if (icmp_datalen > 0) {
-    memcpy (ptr, icmpdata, icmp_datalen);
-    ptr += icmp_datalen;
-    chksumlen += icmp_datalen;
-  }
-
-  // Pad to the next 16-bit boundary
-  if (icmp_datalen % 2) {
-    *ptr = 0;
-    chksumlen++;
-  }
-
-  answer = checksum ((uint8_t *) buf, chksumlen);
-
-  // Free allocated memory.
   free (buf);
 
   return (answer);
