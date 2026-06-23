@@ -425,10 +425,10 @@ main (void) {
       if (recv_iphdr->ip_hl < 5) continue;
       iphlen = recv_iphdr->ip_hl * 4;  // Convert to bytes; IPv4 header length is expressed in 32-bit words.
       if ((bytes < (ETH_HDRLEN + iphlen)) || (bytes < (ETH_HDRLEN + (int) sizeof (struct ip)))) continue;
-      if ((recv_iphdr->ip_p == IPPROTO_ICMP) && (bytes < ETH_HDRLEN + iphlen + ICMP_HDRLEN)) continue;
+      if ((recv_iphdr->ip_p == IPPROTO_ICMP) && (bytes < (ETH_HDRLEN + iphlen + ICMP_HDRLEN))) continue;
       ip_total_len = ntohs (recv_iphdr->ip_len);
-      if (ip_total_len < iphlen + ICMP_HDRLEN) continue;
-      if (bytes < ETH_HDRLEN + ip_total_len) continue;
+      if (ip_total_len < (iphlen + ICMP_HDRLEN)) continue;
+      if (bytes < (ETH_HDRLEN + ip_total_len)) continue;
 
       // Determine offsets to ICMP header.
       recv_icmphdr = (struct icmp *) (recv_ether_frame + ETH_HDRLEN + iphlen);
@@ -453,7 +453,7 @@ main (void) {
         // Extract source IP address from received ethernet frame.
         if (inet_ntop (AF_INET, &(recv_iphdr->ip_src), rec_ip, INET_ADDRSTRLEN) == NULL) {
           status = errno;
-          fprintf (stderr, "inet_ntop() failed.\nError message: %s", strerror (status));
+          fprintf (stderr, "inet_ntop() failed.\nError message: %s\n", strerror (status));
           exit (EXIT_FAILURE);
         }
 
