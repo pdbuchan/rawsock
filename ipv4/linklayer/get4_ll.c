@@ -87,7 +87,7 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Set TCP data.
-  snprintf (url, TEXT_STRINGLEN, "%s", "www.google.com");  // Could be URL or IPv4 address
+  snprintf (url, TEXT_STRINGLEN, "%s", "www.google.com");
   snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
   snprintf (filename, TEXT_STRINGLEN, "filename");
   snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);

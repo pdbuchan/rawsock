@@ -14,7 +14,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv6 ICMP echo request packet.
+// Send an IPv6 ICMP echo request datagram.
 // Changes hoplimit using ancillary data method.
 // Use setsockopt() to bind socket to interface.
 // Includes ICMP data.
@@ -33,7 +33,6 @@
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/icmp6.h>    // struct icmp6_hdr, ICMP6_ECHO_REQUEST
 #include <netdb.h>            // struct addrinfo
-#include <sys/ioctl.h>        // macro ioctl is defined
 #include <net/if.h>           // struct ifreq
 
 #include <errno.h>            // errno, perror()
@@ -63,7 +62,7 @@ main (void) {
   struct ifreq ifr;
   struct msghdr msghdr;
   struct cmsghdr *cmsghdr;
-  struct iovec iov[2];
+  struct iovec iov[1];
 
   memset (&iphdr, 0, sizeof (iphdr));
   memset (&icmphdr, 0, sizeof (icmphdr));
@@ -76,37 +75,22 @@ main (void) {
   icmpdata = allocate_ustrmem (IP_MAXPACKET);
   icmp_msg = allocate_ustrmem (IP_MAXPACKET);
 
-  // Interface to send packet through.
+  // Interface to send datagram through.
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
-  // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (AF_INET6, SOCK_DGRAM, 0)) < 0) {
-    status = errno;
-    fprintf (stderr, "socket() failed to get socket descriptor for using ioctl().\nError message: %s\n", strerror (status));
-    exit (EXIT_FAILURE);
-  }
-
-  // Use ioctl() to look up interface index which we will use to
-  // bind socket descriptor sd to specified interface with setsockopt() since
-  // none of the other arguments of sendto() specify which interface to use.
+  // Copy interface name into ifreq structure for SO_BINDTODEVICE.
   memset (&ifr, 0, sizeof (ifr));
   n = snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
   if ((n < 0) || (n >= (int) sizeof (ifr.ifr_name))) {
     fprintf (stderr, "Invalid interface name: %s\n", interface);
     exit (EXIT_FAILURE);
   }
-  if (ioctl (sd, SIOCGIFINDEX, &ifr) < 0) {
-    fprintf (stderr, "ioctl(SIOCGIFINDEX) failed to get interface index.\nError message: %s\n", strerror (errno));
-    close (sd);
-    exit (EXIT_FAILURE);
-  }
-  close (sd);
-  fprintf (stdout, "Index for interface %s is %d\n", interface, ifr.ifr_ifindex);
 
   // Source IPv6 address: you need to fill this out
-  snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+//  snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (source, INET6_ADDRSTRLEN, "%s", "2607:fea8:30e0:bd:f510:643d:33b:619a");
 
-  // Destination URL or IPv6 address: you need to fill this out
+  // Destination hostname or IPv6 address: you need to fill this out
   snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
@@ -120,22 +104,22 @@ main (void) {
   // Resolve source using getaddrinfo().
   if ((status = getaddrinfo (source, NULL, &hints, &res)) != 0) {
     fprintf (stderr, "getaddrinfo() failed for source.\nError message: %s\n", gai_strerror (status));
-    return (EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
   memset (&src, 0, sizeof (src));
   memcpy (&src, res->ai_addr, res->ai_addrlen);
   srclen = res->ai_addrlen;
-  memcpy (&iphdr.ip6_src, src.sin6_addr.s6_addr, 16 * sizeof (uint8_t));  // Copy to checksum pseudo-header
+  memcpy (&iphdr.ip6_src, src.sin6_addr.s6_addr, 16 * sizeof (uint8_t));
   freeaddrinfo (res);
 
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
-    return (EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
   memset (&dst, 0, sizeof (dst));
   memcpy (&dst, res->ai_addr, res->ai_addrlen);
-  memcpy (&iphdr.ip6_dst, dst.sin6_addr.s6_addr, 16 * sizeof (uint8_t));  // Copy to checksum pseudo-header
+  memcpy (&iphdr.ip6_dst, dst.sin6_addr.s6_addr, 16 * sizeof (uint8_t));
   freeaddrinfo (res);
 
   // ICMP header
@@ -212,7 +196,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Bind socket to interface index.
+  // Bind socket to interface by name.
   if (setsockopt (sd, SOL_SOCKET, SO_BINDTODEVICE, ifr.ifr_name, strlen (ifr.ifr_name) + 1) < 0) {
     status = errno;
     fprintf (stderr, "setsockopt(SOL_SOCKET, SO_BINDTODEVICE) failed.\nError message: %s\n", strerror (status));

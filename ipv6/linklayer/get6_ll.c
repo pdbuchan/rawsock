@@ -82,7 +82,7 @@ main (int argc, char **argv) {
   filename = allocate_strmem (TEXT_STRINGLEN);
 
   // Set TCP data.
-  strncpy (url, "ipv6.google.com", TEXT_STRINGLEN);  // Could be URL or IPv6 address
+  strncpy (url, "ipv6.google.com", TEXT_STRINGLEN);
   strncpy (directory, "/", TEXT_STRINGLEN);
   strncpy (filename, "filename", TEXT_STRINGLEN);
   snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\n\r\n", directory, filename, url);

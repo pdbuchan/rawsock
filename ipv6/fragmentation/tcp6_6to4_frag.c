@@ -77,7 +77,7 @@ main (int argc, char **argv) {
 
   // Allocate memory for various arrays.
   target4 = allocate_strmem (INET_ADDRSTRLEN);
-  target6 = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
+  target6 = allocate_strmem (TEXT_STRINGLEN);
   source4 = allocate_strmem (INET_ADDRSTRLEN);
   source6 = allocate_strmem (INET6_ADDRSTRLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
@@ -148,7 +148,7 @@ main (int argc, char **argv) {
   // IPv4 target as the 6to4 anycast address (do not change)
   strncpy (target4, "192.88.99.1", INET_ADDRSTRLEN);
 
-  // Target URL or IPv6 address: you need to fill this out
+  // Target hostname or IPv6 address: you need to fill this out
   strncpy (target6, "ipv6.google.com", TEXT_STRINGLEN);
 
   // Fill out hints for getaddrinfo().

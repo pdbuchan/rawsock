@@ -133,7 +133,7 @@ main (void) {
   // Source IPv4 address: you need to fill this out
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
-  // Destination URL or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: you need to fill this out
   snprintf (target, TEXT_STRINGLEN, "%s", "www.google.com");
 
   // Fill out hints for getaddrinfo().

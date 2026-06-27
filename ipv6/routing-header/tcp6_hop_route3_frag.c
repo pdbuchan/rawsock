@@ -121,8 +121,8 @@ main (int argc, char **argv) {
   dst_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
-  nexthop = allocate_strmem (TEXT_STRINGLEN);  // Can be URL or IPv6 address.
+  target = allocate_strmem (TEXT_STRINGLEN);
+  nexthop = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
   address = allocate_strmem (INET6_ADDRSTRLEN);
@@ -190,12 +190,12 @@ main (int argc, char **argv) {
   // Source IPv6 address: you need to fill this out
   strncpy (src_ip, "2001:db8::afcd:76aa:721:8da8", INET6_ADDRSTRLEN);
 
-  // URL or IPv6 address of next hop: you need to fill this out
+  // Hostname or IPv6 address of next hop: you need to fill this out
   // This will be used in IPv6 header as destination address.
   // See Section 3 of RFC 6554.
   strncpy (nexthop, "2001:db8::214:51ff:fe2f:1556", TEXT_STRINGLEN);
 
-  // Destination URL or IPv6 address: you need to fill this out
+  // Destination hostname or IPv6 address: you need to fill this out
   // The IP address will be placed at end of routing list.
   // See Section 3 of RFC 6554.
   strncpy (target, "ipv6.google.com", TEXT_STRINGLEN);
