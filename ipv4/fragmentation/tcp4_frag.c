@@ -135,7 +135,8 @@ main (void) {
     fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
   }
 
-  // Set destination MAC address: you need to fill these out
+  // Destination Ethernet MAC address: You need to fill these out.
+  // For off-link destinations, this is normally the next-hop router's MAC address.
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
@@ -184,7 +185,7 @@ main (void) {
     fprintf (stderr, "Can't open file 'data'.\n");
     exit (EXIT_FAILURE);
   }
-  while ((n=fgetc (fi)) != EOF) {
+  while ((n = fgetc (fi)) != EOF) {
     if (i >= (IP_MAXPACKET - IP4_HDRLEN - TCP_HDRLEN)) {
       fprintf (stderr, "Payload too large.\n");
       exit (EXIT_FAILURE);
@@ -376,8 +377,10 @@ main (void) {
   memcpy (buffer + TCP_HDRLEN, tcp_data, tcp_datalen);
 
   // Submit request for a raw socket descriptor.
+  // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed ");
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 

@@ -136,7 +136,7 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
@@ -144,7 +144,8 @@ main (void) {
     fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
   }
 
-  // Set destination MAC address: you need to fill these out
+  // Destination Ethernet MAC address: You need to fill these out.
+  // For off-link destinations, this is normally the next-hop router's MAC address.
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
