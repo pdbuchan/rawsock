@@ -14,28 +14,28 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send a "cooked" IPv6 ICMP packet via raw socket.
-// Need to specify destination MAC address.
-// Values set for echo request packet, includes some ICMP data.
+// Send a "cooked" IPv6 ICMP Echo Request datagram via packet socket.
+// Need to specify the next-hop destination MAC address.
+// Includes some ICMP data.
 
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE 
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // strcpy, memset(), and memcpy()
+#include <string.h>           // memset(), and memcpy()
+#include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/types.h>        // needed for socket(), uint8_t, uint16_t
 #include <sys/socket.h>       // needed for socket()
 #include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_ICMPV6, INET6_ADDRSTRLEN
 #include <netinet/ip.h>       // IP_MAXPACKET (which is 65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/icmp6.h>    // struct icmp6_hdr and ICMP6_ECHO_REQUEST
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
-#include <sys/ioctl.h>        // macro ioctl is defined
 #include <net/if.h>           // struct ifreq
-#include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
+#include <linux/if_ether.h>   // ETH_P_IPV6
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
-#include <net/ethernet.h>
 
 #include <errno.h>            // errno, perror()
 
@@ -46,119 +46,88 @@
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
-uint16_t icmp6_checksum (struct ip6_hdr, struct icmp6_hdr, uint8_t *, int);
+uint16_t icmp6_checksum (struct ip6_hdr, uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
 int
-main (int argc, char **argv) {
+main (void) {
 
-  int i, status, datalen, frame_length, sd, bytes;
+  int status, icmp_datalen, datagram_length, sd;
+  ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip6_hdr iphdr;
   struct icmp6_hdr icmphdr;
-  uint8_t *data, *src_mac, *dst_mac, *ether_frame;
+  uint8_t *icmpdata, *datagram;
   struct addrinfo hints, *res;
   struct sockaddr_in6 *ipv6;
   struct sockaddr_ll device;
   struct ifreq ifr;
   void *tmp;
 
+  memset (&iphdr, 0, sizeof (iphdr));
+  memset (&icmphdr, 0, sizeof (icmphdr));
+
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
-  dst_mac = allocate_ustrmem (6);
-  data = allocate_ustrmem (IP_MAXPACKET);
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
+  icmpdata = allocate_ustrmem (IP_MAXPACKET);
+  datagram = allocate_ustrmem (IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
 
-  // Interface to send packet through.
-  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
+  // Interface to send datagram through.
+  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
-  // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (PF_PACKET, SOCK_DGRAM, IPPROTO_RAW)) < 0) {
-    perror ("socket() failed to get socket descriptor for using ioctl() ");
-    exit (EXIT_FAILURE);
-  }
-
-  // Use ioctl() to look up interface name and get its MAC address.
-  memset (&ifr, 0, sizeof (ifr));
-  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
-    fprintf (stderr, "Interface name too long.\n");
-    exit (EXIT_FAILURE);
-  }
-  if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
-    perror ("ioctl() failed to get source MAC address ");
-    return (EXIT_FAILURE);
-  }
-  close (sd);
-
-  // Copy source MAC address
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
-
-  // Report source MAC address to stdout.
-  fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
-  }
-
-  // Find interface index from interface name and store index in
-  // struct sockaddr_ll device, which will be used as an argument of sendto().
-  memset (&device, 0, sizeof (device));
-  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
-    perror ("if_nametoindex() failed to obtain interface index ");
-    exit (EXIT_FAILURE);
-  }
-  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-
-  // Set destination MAC address: you need to fill this out
-  dst_mac[0] = 0xff;
-  dst_mac[1] = 0xff;
-  dst_mac[2] = 0xff;
-  dst_mac[3] = 0xff;
-  dst_mac[4] = 0xff;
-  dst_mac[5] = 0xff;
+  // Destination Ethernet MAC address: You need to fill these out.
+  // For off-link destinations, this is normally the next-hop router's MAC address.
+  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: you need to fill this out
-  strncpy (src_ip, "2001:db8::214:51ff:fe2f:1556", INET6_ADDRSTRLEN);
+  snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  strncpy (target, "ipv6.google.com", TEXT_STRINGLEN);
+  snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
-  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
-    fprintf (stderr, "getaddrinfo() failed for target: %s\n", gai_strerror (status));
+    fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
   ipv6 = (struct sockaddr_in6 *) res->ai_addr;
   tmp = &(ipv6->sin6_addr);
   if (inet_ntop (AF_INET6, tmp, dst_ip, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
-    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s", strerror (status));
+    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
   freeaddrinfo (res);
 
-  // Fill out sockaddr_ll
+  // Fill out device's sockaddr_ll struct.
+  memset (&device, 0, sizeof (device));
   device.sll_family = AF_PACKET;
   device.sll_protocol = htons (ETH_P_IPV6);
+  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
+    status = errno;
+    fprintf (stderr, "if_nametoindex(\"%s\") failed to obtain interface index.\nError message: %s\n", interface, strerror (status));
+    exit (EXIT_FAILURE);
+  }
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
   memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
   device.sll_halen = 6;
 
   // ICMP data
-  datalen = 4;
-  data[0] = 'T';
-  data[1] = 'e';
-  data[2] = 's';
-  data[3] = 't';
+  icmpdata[0] = (uint8_t) 'T';
+  icmpdata[1] = (uint8_t) 'e';
+  icmpdata[2] = (uint8_t) 's';
+  icmpdata[3] = (uint8_t) 't';
+  icmp_datalen = 4;
 
   // IPv6 header
 
@@ -166,7 +135,7 @@ main (int argc, char **argv) {
   iphdr.ip6_flow = htonl ((6 << 28) | (0 << 20) | 0);
 
   // Payload length (16 bits): ICMP header + ICMP data
-  iphdr.ip6_plen = htons (ICMP_HDRLEN + datalen);
+  iphdr.ip6_plen = htons (ICMP_HDRLEN + icmp_datalen);
 
   // Next header (8 bits): 58 for ICMP
   iphdr.ip6_nxt = IPPROTO_ICMPV6;
@@ -176,13 +145,21 @@ main (int argc, char **argv) {
 
   // Source IPv6 address (128 bits)
   if ((status = inet_pton (AF_INET6, src_ip, &(iphdr.ip6_src))) != 1) {
-    fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
   // Destination IPv6 address (128 bits)
   if ((status = inet_pton (AF_INET6, dst_ip, &(iphdr.ip6_dst))) != 1) {
-    fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
@@ -191,7 +168,7 @@ main (int argc, char **argv) {
   // Message Type (8 bits): echo request
   icmphdr.icmp6_type = ICMP6_ECHO_REQUEST;
 
-  // Message Code (8 bits): echo request
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
   icmphdr.icmp6_code = 0;
 
   // Identifier (16 bits): usually pid of sending process - pick a number
@@ -202,41 +179,52 @@ main (int argc, char **argv) {
 
   // ICMP header checksum (16 bits): set to 0 when calculating checksum
   icmphdr.icmp6_cksum = 0;
-  icmphdr.icmp6_cksum = icmp6_checksum (iphdr, icmphdr, data, datalen);
 
-  // Fill out ethernet frame header.
+  // Fill out IPv6 datagram.
 
-  // Ethernet frame length = ethernet data (IP header + ICMP header + ICMP data)
-  frame_length = IP6_HDRLEN + ICMP_HDRLEN + datalen;
+  // Datagram length = IP header + ICMP header + ICMP data
+  datagram_length = IP6_HDRLEN + ICMP_HDRLEN + icmp_datalen;
 
   // IPv6 header
-  memcpy (ether_frame, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
 
   // ICMP header
-  memcpy (ether_frame + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
 
   // ICMP data
-  memcpy (ether_frame + IP6_HDRLEN + ICMP_HDRLEN, data, datalen * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen * sizeof (uint8_t));
+
+  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // Already set to 0 above.
+  icmphdr.icmp6_cksum = icmp6_checksum (iphdr, datagram + IP6_HDRLEN, ICMP_HDRLEN + icmp_datalen);
+  memcpy (datagram + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
+  fprintf (stdout, "Checksum: 0x%x\n", ntohs (icmphdr.icmp6_cksum));
 
   // Open raw socket descriptor.
-  if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed ");
+  if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IPV6))) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
-  if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
-    perror ("sendto() failed");
+  // Send datagram to socket.
+  bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &device, sizeof (device));
+  if (bytes == -1) {
+    status = errno;
+    fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
+  }
+  // Check for short send.
+  if (bytes != datagram_length) {
+    fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
+    exit(EXIT_FAILURE);
   }
 
   close (sd);
 
   // Free allocated memory.
-  free (src_mac);
-  free (dst_mac);
-  free (data);
-  free (ether_frame);
+  free (icmpdata);
+  free (datagram);
   free (interface);
   free (target);
   free (src_ip);
@@ -283,83 +271,65 @@ checksum (uint8_t *addr, int len) {
 
 // Build IPv6 ICMP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
 uint16_t
-icmp6_checksum (struct ip6_hdr iphdr, struct icmp6_hdr icmp6hdr, uint8_t *payload, int payloadlen) {
+icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
 
-  char buf[IP_MAXPACKET];
-  char *ptr;
-  int chksumlen = 0;
+  uint8_t *buf, *ptr, cvalue = IPPROTO_ICMPV6;
+  uint16_t answer = 0;
+  uint32_t lvalue;
 
+  if (icmp_len < 0) {
+    fprintf (stderr, "ERROR: icmp_len must not be negative in icmp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if (icmp_len < 4) {
+    fprintf (stderr, "ERROR: icmp_len is too small to hold ICMP header in icmp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if (icmp_msg == NULL) {
+    fprintf (stderr, "ERROR: icmp_msg is NULL in icmp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  // Allocate memory for buffer.
+  buf = allocate_ustrmem (40 + icmp_len + 1);  // Add 1 for possible padding.
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy source IP address into buf (128 bits)
   memcpy (ptr, &iphdr.ip6_src.s6_addr, sizeof (iphdr.ip6_src.s6_addr));
-  ptr += sizeof (iphdr.ip6_src);
-  chksumlen += sizeof (iphdr.ip6_src);
+  ptr += sizeof (iphdr.ip6_src.s6_addr);
 
   // Copy destination IP address into buf (128 bits)
   memcpy (ptr, &iphdr.ip6_dst.s6_addr, sizeof (iphdr.ip6_dst.s6_addr));
   ptr += sizeof (iphdr.ip6_dst.s6_addr);
-  chksumlen += sizeof (iphdr.ip6_dst.s6_addr);
 
-  // Copy Upper Layer Packet length into buf (32 bits).
-  // Should not be greater than 65535 (i.e., 2 bytes).
-  *ptr = 0; ptr++;
-  *ptr = 0; ptr++;
-  *ptr = (ICMP_HDRLEN + payloadlen) / 256;
-  ptr++;
-  *ptr = (ICMP_HDRLEN + payloadlen) % 256;
-  ptr++;
-  chksumlen += 4;
+  // Copy Upper-Layer Packet Length into buf (32 bits).
+  lvalue = htonl (icmp_len);
+  memcpy (ptr, &lvalue, sizeof (lvalue));
+  ptr += sizeof (lvalue);
 
   // Copy zero field to buf (24 bits)
   *ptr = 0; ptr++;
   *ptr = 0; ptr++;
   *ptr = 0; ptr++;
-  chksumlen += 3;
 
   // Copy next header field to buf (8 bits)
-  memcpy (ptr, &iphdr.ip6_nxt, sizeof (iphdr.ip6_nxt));
-  ptr += sizeof (iphdr.ip6_nxt);
-  chksumlen += sizeof (iphdr.ip6_nxt);
+  memcpy (ptr, &cvalue, sizeof (cvalue));
+  ptr += sizeof (cvalue);
 
-  // Copy ICMPv6 type to buf (8 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_type, sizeof (icmp6hdr.icmp6_type));
-  ptr += sizeof (icmp6hdr.icmp6_type);
-  chksumlen += sizeof (icmp6hdr.icmp6_type);
+  // Copy ICMP header and ICMP data.
+  memcpy (ptr, icmp_msg, icmp_len);
 
-  // Copy ICMPv6 code to buf (8 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_code, sizeof (icmp6hdr.icmp6_code));
-  ptr += sizeof (icmp6hdr.icmp6_code);
-  chksumlen += sizeof (icmp6hdr.icmp6_code);
+  // ICMP checksum field is bytes 2 and 3 of the ICMP message.
+  // Set to zero for checksum calculation.
+  buf[40 + 2] = 0;
+  buf[40 + 3] = 0;
 
-  // Copy ICMPv6 ID to buf (16 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_id, sizeof (icmp6hdr.icmp6_id));
-  ptr += sizeof (icmp6hdr.icmp6_id);
-  chksumlen += sizeof (icmp6hdr.icmp6_id);
+  answer = checksum (buf, 40 + icmp_len);
 
-  // Copy ICMPv6 sequence number to buff (16 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_seq, sizeof (icmp6hdr.icmp6_seq));
-  ptr += sizeof (icmp6hdr.icmp6_seq);
-  chksumlen += sizeof (icmp6hdr.icmp6_seq);
+  // Free allocated memory.
+  free (buf);
 
-  // Copy ICMPv6 checksum to buf (16 bits)
-  // Zero, since we don't know it yet.
-  *ptr = 0; ptr++;
-  *ptr = 0; ptr++;
-  chksumlen += 2;
-
-  // Copy ICMPv6 payload to buf
-  memcpy (ptr, payload, payloadlen * sizeof (uint8_t));
-  ptr += payloadlen;
-  chksumlen += payloadlen;
-
-  // Pad to the next 16-bit boundary
-  if (payloadlen % 2) {
-    *ptr = 0;
-    chksumlen++;
-  }
-
-  return checksum ((uint8_t *) buf, chksumlen);
+  return (answer);
 }
 
 // Allocate memory for an array of chars.

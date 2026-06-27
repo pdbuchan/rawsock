@@ -132,7 +132,7 @@ main (void) {
   hbh_y = allocate_intmem (MAX_HBHOPTIONS);  // Hop-by-hop option alignment requirement y (of xN + y): hbh_y[option #] = int
   auth_data = allocate_ustrmem (0xff * 0xffff);  // auth_data = uint8_t *
   src_mac = allocate_ustrmem (6);
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
+  ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
@@ -303,7 +303,7 @@ main (void) {
   }
   freeaddrinfo (res);
 
-  // Fill out sockaddr_ll.
+  // Fill out device's sockaddr_ll struct.
   memset (&device, 0, sizeof (device));
   device.sll_family = AF_PACKET;
   device.sll_protocol = htons (ETH_P_IPV6);

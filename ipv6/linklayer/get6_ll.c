@@ -15,7 +15,7 @@
 */
 
 // Send an IPv6 HTTP GET packet via raw socket at the link layer (ethernet frame).
-// Need to have destination MAC address.
+// Need to specify the next-hop destination MAC address.
 
 #define __FAVOR_BSD           // Use BSD format of tcp header
 #include <stdio.h>

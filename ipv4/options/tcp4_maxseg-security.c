@@ -585,7 +585,7 @@ tcp4_checksum (struct ip iphdr, struct tcphdr tcphdr, uint8_t *options, int opt_
   chksumlen += sizeof (tcphdr.th_urp);
 
   // Copy TCP options to buf, if any. TCP options come immediately after
-  // the fixed 20-byte TCP header and before any TCP tcp_data.
+  // the fixed 20-byte TCP header and before any TCP data.
   if (opt_len > 0) {
     memcpy (ptr, options, opt_len);
     ptr += opt_len;
