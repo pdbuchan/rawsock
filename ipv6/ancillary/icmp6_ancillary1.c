@@ -87,8 +87,7 @@ main (void) {
   }
 
   // Source IPv6 address: you need to fill this out
-//  snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
-  snprintf (source, INET6_ADDRSTRLEN, "%s", "2607:fea8:30e0:bd:f510:643d:33b:619a");
+  snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
   snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
