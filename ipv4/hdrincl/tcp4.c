@@ -328,7 +328,7 @@ checksum (uint8_t *addr, int len) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum. Return it in network byte order
+  // Checksum is one's complement of sum. Return it in network byte order
   // so it can be copied directly into the packet header.
   answer = ~sum;
 
