@@ -290,8 +290,8 @@ checksum (uint8_t *addr, int len) {
     sum += ((uint16_t) addr[0] << 8);
   }
 
-  // Fold 32-bit sum into 16 bits; we lose information by doing this,
-  // increasing the chances of a collision.
+  // Fold the accumulated sum into 16 bits by repeatedly adding
+  // carries back into the low 16 bits (one's-complement arithmetic).
   // sum = (lower 16 bits) + (upper 16 bits shifted right 16 bits)
   while (sum >> 16) {
     sum = (sum & 0xffff) + (sum >> 16);

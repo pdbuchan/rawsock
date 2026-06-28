@@ -32,7 +32,7 @@
 #include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
 #include <netinet/udp.h>      // struct udphdr
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
-#include <net/if.h>           // struct ifreq
+#include <net/if.h>           // IFNAMSIZ
 #include <linux/if_ether.h>   // ETH_P_IP
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
 #include <time.h>             // time()
@@ -58,20 +58,19 @@ main (void) {
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct udphdr udphdr;
-  uint8_t *data, *datagram;
+  uint8_t *udp_data, *datagram;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device;
-  struct ifreq ifr;
   void *tmp;
 
   memset (&iphdr, 0, sizeof (iphdr));
   memset (&udphdr, 0, sizeof (udphdr));
 
   // Allocate memory for various arrays.
-  data = allocate_ustrmem (IP_MAXPACKET);
+  udp_data = allocate_ustrmem (IP_MAXPACKET);
   datagram = allocate_ustrmem (IP_MAXPACKET);
-  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  interface = allocate_strmem (IFNAMSIZ);
   target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
@@ -80,7 +79,7 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send datagram through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
@@ -126,11 +125,11 @@ main (void) {
   device.sll_halen = 6;
 
   // UDP data
+  udp_data[0] = (uint8_t) 'T';
+  udp_data[1] = (uint8_t) 'e';
+  udp_data[2] = (uint8_t) 's';
+  udp_data[3] = (uint8_t) 't';
   udp_datalen = 4;
-  data[0] = 'T';
-  data[1] = 'e';
-  data[2] = 's';
-  data[3] = 't';
 
   // IPv4 header
 
@@ -211,7 +210,7 @@ main (void) {
 
   // UDP checksum (16 bits)
   udphdr.check = 0;
-  udphdr.check = udp4_checksum (iphdr, udphdr, data, udp_datalen);
+  udphdr.check = udp4_checksum (iphdr, udphdr, udp_data, udp_datalen);
 
   // Fill out IP datagram.
 
@@ -225,7 +224,7 @@ main (void) {
   memcpy (datagram + IP4_HDRLEN, &udphdr, UDP_HDRLEN);
 
   // UDP data
-  memcpy (datagram + IP4_HDRLEN + UDP_HDRLEN, data, udp_datalen);
+  memcpy (datagram + IP4_HDRLEN + UDP_HDRLEN, udp_data, udp_datalen);
 
   // Open raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IP))) < 0) {
@@ -251,7 +250,7 @@ main (void) {
   close (sd);
 
   // Free allocated memory.
-  free (data);
+  free (udp_data);
   free (datagram);
   free (interface);
   free (target);
@@ -283,8 +282,8 @@ checksum (uint8_t *addr, int len) {
     sum += ((uint16_t) addr[0] << 8);
   }
 
-  // Fold 32-bit sum into 16 bits; we lose information by doing this,
-  // increasing the chances of a collision.
+  // Fold the accumulated sum into 16 bits by repeatedly adding
+  // carries back into the low 16 bits (one's-complement arithmetic).
   // sum = (lower 16 bits) + (upper 16 bits shifted right 16 bits)
   while (sum >> 16) {
     sum = (sum & 0xffff) + (sum >> 16);

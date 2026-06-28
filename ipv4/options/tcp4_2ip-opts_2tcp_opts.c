@@ -525,8 +525,8 @@ checksum (uint8_t *addr, int len) {
     sum += ((uint16_t) addr[0] << 8);
   }
 
-  // Fold 32-bit sum into 16 bits; we lose information by doing this,
-  // increasing the chances of a collision.
+  // Fold the accumulated sum into 16 bits by repeatedly adding
+  // carries back into the low 16 bits (one's-complement arithmetic).
   // sum = (lower 16 bits) + (upper 16 bits shifted right 16 bits)
   while (sum >> 16) {
     sum = (sum & 0xffff) + (sum >> 16);
@@ -563,7 +563,7 @@ ip4_checksum (struct ip iphdr, uint8_t *options, int opt_len) {
 }
 
 // Build IPv4 TCP pseudo-header and call checksum function.
-// This version supports any combination of TCP options and TCP tcp_data:
+// This version supports any combination of TCP options and TCP data:
 //   options  == NULL and opt_len == 0       : no TCP options
 //   tcp_data == NULL and tcp_datalen == 0   : no TCP data
 //   options + tcp_data                      : TCP options followed by TCP data

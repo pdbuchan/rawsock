@@ -14,28 +14,29 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send a "cooked" IPv6 UDP packet via raw socket.
+// Send a "cooked" IPv6 UDP packet via packet socket.
 // Need to specify destination MAC address.
 // Includes some UDP data.
 
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // strcpy, memset(), and memcpy()
+#include <string.h>           // memset(), and memcpy()
+#include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/types.h>        // needed for socket(), uint8_t, uint16_t
 #include <sys/socket.h>       // needed for socket()
 #include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_UDP, INET6_ADDRSTRLEN
 #include <netinet/ip.h>       // IP_MAXPACKET (which is 65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/udp.h>      // struct udphdr
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
-#include <sys/ioctl.h>        // macro ioctl is defined
-#include <net/if.h>           // struct ifreq
-#include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
+#include <net/if.h>           // IFNAMSIZ
+#include <linux/if_ether.h>   // ETH_P_IPV6
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
-#include <net/ethernet.h>
+#include <time.h>             // time()
 
 #include <errno.h>            // errno, perror()
 
@@ -51,114 +52,85 @@ char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
 int
-main (int argc, char **argv) {
+main (void) {
 
-  int i, status, datalen, frame_length, sd, bytes;
+  int status, udp_datalen, datagram_length, sd;
+  ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip6_hdr iphdr;
   struct udphdr udphdr;
-  uint8_t *data, *src_mac, *dst_mac, *ether_frame;
+  uint8_t *udp_data, *datagram;
   struct addrinfo hints, *res;
   struct sockaddr_in6 *ipv6;
   struct sockaddr_ll device;
-  struct ifreq ifr;
   void *tmp;
 
+  memset (&iphdr, 0, sizeof (iphdr));
+  memset (&udphdr, 0, sizeof (udphdr));
+
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
-  dst_mac = allocate_ustrmem (6);
-  data = allocate_ustrmem (IP_MAXPACKET);
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
-  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  udp_data = allocate_ustrmem (IP_MAXPACKET);
+  datagram = allocate_ustrmem (IP_MAXPACKET);
+  interface = allocate_strmem (IFNAMSIZ);
   target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
 
+  // Random number seed
+  srand ((unsigned) time (NULL));
+
   // Interface to send packet through.
-  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
+  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
 
-  // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (PF_PACKET, SOCK_DGRAM, IPPROTO_RAW)) < 0) {
-    perror ("socket() failed to get socket descriptor for using ioctl() ");
-    exit (EXIT_FAILURE);
-  }
-
-  // Use ioctl() to look up interface name and get its MAC address.
-  memset (&ifr, 0, sizeof (ifr));
-  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
-    fprintf (stderr, "Interface name too long.\n");
-    exit (EXIT_FAILURE);
-  }
-  if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
-    perror ("ioctl() failed to get source MAC address ");
-    return (EXIT_FAILURE);
-  }
-  close (sd);
-
-  // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
-
-  // Report source MAC address to stdout.
-  fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
-  }
-
-  // Find interface index from interface name and store index in
-  // struct sockaddr_ll device, which will be used as an argument of sendto().
-  memset (&device, 0, sizeof (device));
-  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
-    perror ("if_nametoindex() failed to obtain interface index ");
-    exit (EXIT_FAILURE);
-  }
-  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-
-  // Set destination MAC address: you need to fill this out
-  dst_mac[0] = 0xff;
-  dst_mac[1] = 0xff;
-  dst_mac[2] = 0xff;
-  dst_mac[3] = 0xff;
-  dst_mac[4] = 0xff;
-  dst_mac[5] = 0xff;
+  // Destination Ethernet MAC address: You need to fill these out.
+  // For off-link destinations, this is normally the next-hop router's MAC address.
+  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: you need to fill this out
-  strncpy (src_ip, "2001:db8::214:51ff:fe2f:1556", INET6_ADDRSTRLEN);
+  snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  strncpy (target, "ipv6.google.com", TEXT_STRINGLEN);
+  snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
-  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
-    fprintf (stderr, "getaddrinfo() failed for target: %s\n", gai_strerror (status));
+    fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
   ipv6 = (struct sockaddr_in6 *) res->ai_addr;
   tmp = &(ipv6->sin6_addr);
   if (inet_ntop (AF_INET6, tmp, dst_ip, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
-    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s", strerror (status));
+    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
   freeaddrinfo (res);
 
-  // Fill out sockaddr_ll.
+  // Fill out device's sockaddr_ll struct.
+  memset (&device, 0, sizeof (device));
   device.sll_family = AF_PACKET;
   device.sll_protocol = htons (ETH_P_IPV6);
+  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
+    status = errno;
+    fprintf (stderr, "if_nametoindex(\"%s\") failed to obtain interface index.\nError message: %s\n", interface, strerror (status));
+    exit (EXIT_FAILURE);
+  }
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
   memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
   device.sll_halen = 6;
 
   // UDP data
-  datalen = 4;
-  data[0] = 'T';
-  data[1] = 'e';
-  data[2] = 's';
-  data[3] = 't';
+  udp_data[0] = (uint8_t) 'T';
+  udp_data[1] = (uint8_t) 'e';
+  udp_data[2] = (uint8_t) 's';
+  udp_data[3] = (uint8_t) 't';
+  udp_datalen = 4;
 
   // IPv6 header
 
@@ -166,7 +138,7 @@ main (int argc, char **argv) {
   iphdr.ip6_flow = htonl ((6 << 28) | (0 << 20) | 0);
 
   // Payload length (16 bits): UDP header + UDP data
-  iphdr.ip6_plen = htons (UDP_HDRLEN + datalen);
+  iphdr.ip6_plen = htons (UDP_HDRLEN + udp_datalen);
 
   // Next header (8 bits): 17 for UDP
   iphdr.ip6_nxt = IPPROTO_UDP;
@@ -176,13 +148,21 @@ main (int argc, char **argv) {
 
   // Source IPv6 address (128 bits)
   if ((status = inet_pton (AF_INET6, src_ip, &(iphdr.ip6_src))) != 1) {
-    fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
   // Destination IPv6 address (128 bits)
   if ((status = inet_pton (AF_INET6, dst_ip, &(iphdr.ip6_dst))) != 1) {
-    fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
@@ -195,44 +175,51 @@ main (int argc, char **argv) {
   udphdr.dest = htons (4950);
 
   // Length of UDP datagram (16 bits): UDP header + UDP data
-  udphdr.len = htons (UDP_HDRLEN + datalen);
+  udphdr.len = htons (UDP_HDRLEN + udp_datalen);
 
   // UDP checksum (16 bits)
-  udphdr.check = udp6_checksum (iphdr, udphdr, data, datalen);
+  udphdr.check = udp6_checksum (iphdr, udphdr, udp_data, udp_datalen);
 
-  // Fill out ethernet frame header.
+  // Fill out IP datagram.
 
-  // Ethernet frame length = ethernet data (IP header + UDP header + UDP data)
-  frame_length = IP6_HDRLEN + UDP_HDRLEN + datalen;
+  // Datagram length = IP header + UDP header + UDP data
+  datagram_length = IP6_HDRLEN + UDP_HDRLEN + udp_datalen;
 
   // IPv6 header
-  memcpy (ether_frame, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
 
   // UDP header
-  memcpy (ether_frame + IP6_HDRLEN, &udphdr, UDP_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN, &udphdr, UDP_HDRLEN * sizeof (uint8_t));
 
   // UDP data
-  memcpy (ether_frame + IP6_HDRLEN + UDP_HDRLEN, data, datalen * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN + UDP_HDRLEN, udp_data, udp_datalen * sizeof (uint8_t));
 
   // Open raw socket descriptor.
-  if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed ");
-    exit (EXIT_FAILURE);
+  if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IPV6))) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
+    exit(EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
-  if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
-    perror ("sendto() failed");
+  // Send datagram to socket.
+  bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &device, sizeof (device));
+  if (bytes == -1) {
+    status = errno;
+    fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
+  // Check for short send.
+  if (bytes != datagram_length) {
+    fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
+    exit(EXIT_FAILURE);
+  }
 
+  // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.
-  free (src_mac);
-  free (dst_mac);
-  free (data);
-  free (ether_frame);
+  free (udp_data);
+  free (datagram);
   free (interface);
   free (target);
   free (src_ip);
@@ -263,14 +250,14 @@ checksum (uint8_t *addr, int len) {
     sum += ((uint16_t) addr[0] << 8);
   }
 
-  // Fold 32-bit sum into 16 bits; we lose information by doing this,
-  // increasing the chances of a collision.
+  // Fold the accumulated sum into 16 bits by repeatedly adding
+  // carries back into the low 16 bits (one's-complement arithmetic).
   // sum = (lower 16 bits) + (upper 16 bits shifted right 16 bits)
   while (sum >> 16) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum. Return it in network byte order
+  // Checksum is one's complement of sum. Return it in network byte order
   // so it can be copied directly into the packet header.
   answer = ~sum;
 
@@ -279,12 +266,26 @@ checksum (uint8_t *addr, int len) {
 
 // Build IPv6 UDP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
 uint16_t
-udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *payload, int payloadlen) {
+udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, int udp_datalen) {
 
-  char buf[IP_MAXPACKET];
-  char *ptr;
-  int chksumlen = 0;
+  int udp_segment_len, chksumlen = 0;
+  uint8_t *buf, *ptr;
+  uint16_t answer;
+  uint32_t lvalue;
 
+  if (udp_datalen < 0) {
+    fprintf (stderr, "ERROR: udp_datalen must not be negative in udp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if ((udp_datalen > 0) && (udp_data == NULL)) {
+    fprintf (stderr, "ERROR: udp_data is NULL but udp_datalen > 0 in udp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  udp_segment_len = UDP_HDRLEN + udp_datalen;
+
+  // Allocate memory for buffer.
+  buf = allocate_ustrmem (40 + udp_segment_len + 1);  // Add 1 for possible padding.
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy source IP address into buf (128 bits)
@@ -298,9 +299,10 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *payload, int
   chksumlen += sizeof (iphdr.ip6_dst.s6_addr);
 
   // Copy UDP length into buf (32 bits)
-  memcpy (ptr, &udphdr.len, sizeof (udphdr.len));
-  ptr += sizeof (udphdr.len);
-  chksumlen += sizeof (udphdr.len);
+  lvalue = htonl (udp_segment_len);
+  memcpy (ptr, &lvalue, sizeof (lvalue));
+  ptr += sizeof (lvalue);
+  chksumlen += sizeof (lvalue);
 
   // Copy zero field to buf (24 bits)
   *ptr = 0; ptr++;
@@ -334,18 +336,25 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *payload, int
   *ptr = 0; ptr++;
   chksumlen += 2;
 
-  // Copy payload to buf
-  memcpy (ptr, payload, payloadlen * sizeof (uint8_t));
-  ptr += payloadlen;
-  chksumlen += payloadlen;
+  // Copy UDP data to buf, if any.
+  if (udp_datalen > 0) {
+    memcpy (ptr, udp_data, udp_datalen);
+    ptr += udp_datalen;
+    chksumlen += udp_datalen;
+  }
 
   // Pad to the next 16-bit boundary
-  if (payloadlen % 2) {
+  if (udp_datalen % 2) {
     *ptr = 0;
     chksumlen++;
   }
 
-  return checksum ((uint8_t *) buf, chksumlen);
+  answer = checksum ((uint8_t *) buf, chksumlen);
+
+  // Free allocated memory.
+  free (buf);
+
+  return (answer);
 }
 
 // Allocate memory for an array of chars.

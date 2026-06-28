@@ -33,7 +33,7 @@
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/icmp6.h>    // struct icmp6_hdr and ICMP6_ECHO_REQUEST
 #include <arpa/inet.h>        // inet_pton() and inet_ntop()
-#include <net/if.h>           // struct ifreq
+#include <net/if.h>           // IFNAMSIZ
 #include <linux/if_ether.h>   // ETH_P_IPV6
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
 
@@ -62,7 +62,6 @@ main (void) {
   struct addrinfo hints, *res;
   struct sockaddr_in6 *ipv6;
   struct sockaddr_ll device;
-  struct ifreq ifr;
   void *tmp;
 
   memset (&iphdr, 0, sizeof (iphdr));
@@ -71,13 +70,13 @@ main (void) {
   // Allocate memory for various arrays.
   icmpdata = allocate_ustrmem (IP_MAXPACKET);
   datagram = allocate_ustrmem (IP_MAXPACKET);
-  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  interface = allocate_strmem (IFNAMSIZ);
   target = allocate_strmem (TEXT_STRINGLEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
 
   // Interface to send datagram through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
@@ -255,8 +254,8 @@ checksum (uint8_t *addr, int len) {
     sum += ((uint16_t) addr[0] << 8);
   }
 
-  // Fold 32-bit sum into 16 bits; we lose information by doing this,
-  // increasing the chances of a collision.
+  // Fold the accumulated sum into 16 bits by repeatedly adding
+  // carries back into the low 16 bits (one's-complement arithmetic).
   // sum = (lower 16 bits) + (upper 16 bits shifted right 16 bits)
   while (sum >> 16) {
     sum = (sum & 0xffff) + (sum >> 16);
