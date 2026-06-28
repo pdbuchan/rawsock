@@ -19,7 +19,6 @@
 // data method.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE 
-#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -36,16 +35,9 @@
 #include <net/if.h>           // struct ifreq
 
 #include <errno.h>            // errno, perror()
+
 // Define some constants.
 #define TEXT_STRINGLEN 80     // Maximum number of characters in a string
-
-// Definition of pktinfo6 created from definition of in6_pktinfo in netinet/in.h.
-// This should remove "redefinition of in6_pktinfo" errors in some linux variants.
-typedef struct _pktinfo6 pktinfo6;
-struct _pktinfo6 {
-  struct in6_addr ipi6_addr;
-  int ipi6_ifindex;
-};
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -69,7 +61,7 @@ main (void) {
   struct msghdr msghdr;
   struct ifreq ifr;
   struct cmsghdr *cmsghdr1, *cmsghdr2;
-  pktinfo6 *pktinfo;
+  struct in6_pktinfo *pktinfo;
   struct iovec iov[1];
   char *target, *source, *interface;
 
@@ -222,7 +214,7 @@ main (void) {
   cmsghdr2->cmsg_level = IPPROTO_IPV6;
   cmsghdr2->cmsg_type = IPV6_PKTINFO;  // We want to specify interface here.
   cmsghdr2->cmsg_len = CMSG_LEN (sizeof (*pktinfo));
-  pktinfo = (pktinfo6 *) CMSG_DATA (cmsghdr2);
+  pktinfo = (struct in6_pktinfo *) CMSG_DATA (cmsghdr2);
   pktinfo->ipi6_ifindex = ifindex;
 
   nahdr.nd_na_hdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, NA_HDRLEN + icmp_datalen);
