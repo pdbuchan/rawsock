@@ -145,7 +145,7 @@ main (void) {
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
+  if ((sd = socket (AF_INET6, SOCK_DGRAM, 0)) < 0) {
     status = errno;
     fprintf (stderr, "socket() failed to get socket descriptor for using ioctl().\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
@@ -682,7 +682,7 @@ checksum (uint8_t *addr, int len) {
 //   tcp_data == NULL and tcp_datalen == 0   : no TCP data
 //   options + tcp_data                      : TCP options followed by TCP data
 //
-// The caller must set tcphdr.th_off before calling this function.  th_off is
+// The caller must set tcphdr.th_off before calling this function. th_off is
 // the TCP header length in 32-bit words, so it must include any TCP options.
 // For example:
 //   tcphdr.th_off = (TCP_HDRLEN + opt_len) / 4;
@@ -697,6 +697,8 @@ tcp6_checksum (struct ip6_hdr iphdr, struct tcphdr tcphdr, uint8_t *options, int
   uint8_t *buf, *ptr, cvalue;
   uint16_t answer = 0;
   uint32_t lvalue;
+
+  cvalue = IPPROTO_TCP;
 
   if (opt_len < 0) {
     fprintf (stderr, "ERROR: opt_len must not be negative in tcp6_checksum().\n");
@@ -758,7 +760,7 @@ tcp6_checksum (struct ip6_hdr iphdr, struct tcphdr tcphdr, uint8_t *options, int
   chksumlen += 3;
 
   // Copy next header field to buf (8 bits)
-  memcpy (ptr, &iphdr.ip6_nxt, sizeof (iphdr.ip6_nxt));
+  memcpy (ptr, &cvalue, sizeof (cvalue));
   ptr += sizeof (iphdr.ip6_nxt);
   chksumlen += sizeof (iphdr.ip6_nxt);
 
