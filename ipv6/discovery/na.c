@@ -15,8 +15,7 @@
 */
 
 // Send an IPv6 ICMP neighbor advertisement datagram.
-// Change hoplimit and specify interface using ancillary
-// data method.
+// Change hoplimit and specify interface using ancillary data method.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE 
 #include <stdio.h>
@@ -47,8 +46,6 @@ uint8_t *allocate_ustrmem (int);
 
 int
 main (void) {
-
-  int NA_HDRLEN = sizeof (struct nd_neighbor_advert);  // Length of NA message header
 
   int i, n, sd, status, ifindex, icmp_datalen, cmsglen;
   ssize_t bytes;
@@ -181,8 +178,8 @@ main (void) {
 
   // Build ICMP message for ICMP checksum calculation.
   memset (icmp_msg, 0, IP_MAXPACKET * sizeof (uint8_t));
-  memcpy (icmp_msg, &nahdr, NA_HDRLEN * sizeof (uint8_t));
-  memcpy (icmp_msg + NA_HDRLEN, icmp_data, icmp_datalen * sizeof (uint8_t));
+  memcpy (icmp_msg, &nahdr, sizeof (struct nd_neighbor_advert) * sizeof (uint8_t));
+  memcpy (icmp_msg + sizeof (struct nd_neighbor_advert), icmp_data, icmp_datalen * sizeof (uint8_t));
 
   // Compose the msghdr structure.
   memset (&msghdr, 0, sizeof (msghdr));
@@ -191,7 +188,7 @@ main (void) {
 
   memset (&iov, 0, sizeof (iov));
   iov[0].iov_base = (uint8_t *) icmp_msg;
-  iov[0].iov_len = NA_HDRLEN + icmp_datalen;
+  iov[0].iov_len = sizeof (struct nd_neighbor_advert) + icmp_datalen;
   msghdr.msg_iov = iov;   // scatter/gather array
   msghdr.msg_iovlen = 1;  // number of elements in scatter/gather array
 
@@ -217,8 +214,8 @@ main (void) {
   pktinfo = (struct in6_pktinfo *) CMSG_DATA (cmsghdr2);
   pktinfo->ipi6_ifindex = ifindex;
 
-  nahdr.nd_na_hdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, NA_HDRLEN + icmp_datalen);
-  memcpy (icmp_msg, &nahdr, NA_HDRLEN);  // Save ICMP header with checksum to datagram.
+  nahdr.nd_na_hdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, sizeof (struct nd_neighbor_advert) + icmp_datalen);
+  memcpy (icmp_msg, &nahdr, sizeof (struct nd_neighbor_advert));  // Save ICMP header with checksum to datagram.
   fprintf (stdout, "Checksum: %x\n", ntohs (nahdr.nd_na_hdr.icmp6_cksum));
 
   // Request a socket descriptor sd.
@@ -235,8 +232,8 @@ main (void) {
     fprintf (stderr, "sendmsg() failed.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
-  if (bytes != (NA_HDRLEN + icmp_datalen)) {
-    fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %d bytes.\n", bytes, NA_HDRLEN + icmp_datalen);
+  if (bytes != ((int) sizeof (struct nd_neighbor_advert) + icmp_datalen)) {
+    fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %d bytes.\n", bytes, (int) sizeof (struct nd_neighbor_advert) + icmp_datalen);
     exit (EXIT_FAILURE);
   }
   close (sd);
