@@ -46,7 +46,6 @@ typedef struct {
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length
 #define ICMP_HDRLEN 8         // ICMP header length for router solicitation
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);

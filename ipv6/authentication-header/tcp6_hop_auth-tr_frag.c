@@ -72,7 +72,7 @@ struct _auth_hdr {
 #define MAX_HBHOPTIONS 10     // Maximum number of extension header options
 #define MAX_HBHOPTLEN 256     // Maximum length of a hop-by-hop option (some large value)
 #define ATH_HDRLEN 12         // Authentication header length, excludes authentication data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -133,7 +133,7 @@ main (void) {
   src_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
   tcp_data = allocate_ustrmem (IP_MAXPACKET);
@@ -191,7 +191,7 @@ main (void) {
   snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
 
   // Number of hop-by-hop extension header options.
   hbh_nopt = 1;

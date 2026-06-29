@@ -51,12 +51,12 @@ typedef struct {
 } ARP_HDR;
 
 // Define some constants.
-#define ETH_HDRLEN ETH_HLEN  // Ethernet header length
-#define IP4_HDRLEN 20        // IPv4 header length
-#define ARP_ETH_IPV4_LEN 28  // Complete Ethernet/IPv4 ARP packet
-#define ARPOP_REQUEST 1      // Taken from <linux/if_arp.h>
-#define ARPOP_REPLY 2        // Taken from <linux/if_arp.h>
-#define TEXT_STRINGLEN 80    // Maximum number of characters in a string
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define IP4_HDRLEN 20         // IPv4 header length
+#define ARP_ETH_IPV4_LEN 28   // Complete Ethernet/IPv4 ARP packet
+#define ARPOP_REQUEST 1       // Taken from <linux/if_arp.h>
+#define ARPOP_REPLY 2         // Taken from <linux/if_arp.h>
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 char *allocate_strmem (int);
@@ -82,8 +82,8 @@ main (void) {
   src_mac = allocate_ustrmem (6);
   dst_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
-  interface = allocate_strmem (TEXT_STRINGLEN);
-  target = allocate_strmem (TEXT_STRINGLEN);
+  interface = allocate_strmem (sizeof (ifr.ifr_name));
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
 
   // Interface to send packet through.
@@ -120,7 +120,7 @@ main (void) {
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
   // Destination hostname or IPv4 address (must be a link-local node): you need to fill this out
-  strncpy (target, "192.168.0.63", TEXT_STRINGLEN);
+  snprintf (target, HOSTNAME_LEN, "192.168.0.63");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

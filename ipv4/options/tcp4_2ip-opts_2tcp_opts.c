@@ -48,14 +48,14 @@
 #include <errno.h>            // errno, perror()
 
 // Define some constants.
-#define ETH_HDRLEN ETH_HLEN  // Ethernet header length
-#define IP4_HDRLEN 20        // IPv4 header length
-#define TCP_HDRLEN 20        // TCP header length, excludes tcp_options data
-#define MAX_IP_OPTIONS 10    // Maximum number of IP options
-#define MAX_TCP_OPTIONS 10   // Maximum number of TCP options
-#define IP_MAX_OPTLEN 40     // Maximum length of IP header option
-#define TCP_MAX_OPTLEN 40    // Maximum length of TCP header option
-#define TEXT_STRINGLEN 80    // Maximum number of characters in a string
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define IP4_HDRLEN 20         // IPv4 header length
+#define TCP_HDRLEN 20         // TCP header length, excludes tcp_options data
+#define MAX_IP_OPTIONS 10     // Maximum number of IP options
+#define MAX_TCP_OPTIONS 10    // Maximum number of TCP options
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
+#define IP4OPT_BUFLEN 40      // Maximum IPv4 options length 
+#define TCPOPT_BUFLEN 40      // Maximum TCP options length
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -92,21 +92,21 @@ main (void) {
   src_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
   ip_opt_len = allocate_intmem (MAX_IP_OPTIONS);
   ip_options = allocate_ustrmemp (MAX_IP_OPTIONS);
   for (i = 0; i < MAX_IP_OPTIONS; i++) {
-    ip_options[i] = allocate_ustrmem (IP_MAX_OPTLEN);
+    ip_options[i] = allocate_ustrmem (IP4OPT_BUFLEN);
   }
   tcp_opt_len = allocate_intmem (MAX_TCP_OPTIONS);
   tcp_options = allocate_ustrmemp (MAX_TCP_OPTIONS);
   for (i = 0; i < MAX_TCP_OPTIONS; i++) {
-    tcp_options[i] = allocate_ustrmem (TCP_MAX_OPTLEN);
+    tcp_options[i] = allocate_ustrmem (TCPOPT_BUFLEN);
   }
-  ip_opt_buf = allocate_ustrmem (IP_MAX_OPTLEN);
-  tcp_opt_buf = allocate_ustrmem (TCP_MAX_OPTLEN);
+  ip_opt_buf = allocate_ustrmem (IP4OPT_BUFLEN);
+  tcp_opt_buf = allocate_ustrmem (TCPOPT_BUFLEN);
 
   // Random number seed
   srand ((unsigned) time (NULL));
@@ -152,7 +152,7 @@ main (void) {
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -223,12 +223,12 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   for (i = 0; i < ip_nopt; i++) {
-    if (ip_opt_len[i] > IP_MAX_OPTLEN) {
-      fprintf (stderr, "IP option %d is too long: %d bytes, maximum is %d bytes.\n", i, ip_opt_len[i], IP_MAX_OPTLEN);
+    if (ip_opt_len[i] > IP4OPT_BUFLEN) {
+      fprintf (stderr, "IP option %d is too long: %d bytes, maximum is %d bytes.\n", i, ip_opt_len[i], IP4OPT_BUFLEN);
       exit (EXIT_FAILURE);
     }
-    if ((c + ip_opt_len[i]) > IP_MAX_OPTLEN) {
-      fprintf (stderr, "Too many IP option bytes: %d bytes, maximum is %d bytes.\n", c + ip_opt_len[i], IP_MAX_OPTLEN);
+    if ((c + ip_opt_len[i]) > IP4OPT_BUFLEN) {
+      fprintf (stderr, "Too many IP option bytes: %d bytes, maximum is %d bytes.\n", c + ip_opt_len[i], IP4OPT_BUFLEN);
       exit (EXIT_FAILURE);
     }
     memcpy (ip_opt_buf + c, ip_options[i], ip_opt_len[i]);
@@ -238,8 +238,8 @@ main (void) {
 
   // Pad to the next 4-byte boundary.
   while ((ip_buf_len%4) != 0) {
-    if (ip_buf_len >= IP_MAX_OPTLEN) {
-      fprintf (stderr, "Too many IP option bytes after padding: %d bytes, maximum is %d bytes.\n", ip_buf_len + 1, IP_MAX_OPTLEN);
+    if (ip_buf_len >= IP4OPT_BUFLEN) {
+      fprintf (stderr, "Too many IP option bytes after padding: %d bytes, maximum is %d bytes.\n", ip_buf_len + 1, IP4OPT_BUFLEN);
       exit (EXIT_FAILURE);
     }
     ip_opt_buf[ip_buf_len] = 0;
@@ -277,12 +277,12 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   for (i = 0; i < tcp_nopt; i++) {
-    if (tcp_opt_len[i] > TCP_MAX_OPTLEN) {
-      fprintf (stderr, "TCP option %d is too long: %d bytes, maximum is %d bytes.\n", i, tcp_opt_len[i], TCP_MAX_OPTLEN);
+    if (tcp_opt_len[i] > TCPOPT_BUFLEN) {
+      fprintf (stderr, "TCP option %d is too long: %d bytes, maximum is %d bytes.\n", i, tcp_opt_len[i], TCPOPT_BUFLEN);
       exit (EXIT_FAILURE);
     }
-    if ((c + tcp_opt_len[i]) > TCP_MAX_OPTLEN) {
-      fprintf (stderr, "Too many TCP option bytes: %d bytes, maximum is %d bytes.\n", c + tcp_opt_len[i], TCP_MAX_OPTLEN);
+    if ((c + tcp_opt_len[i]) > TCPOPT_BUFLEN) {
+      fprintf (stderr, "Too many TCP option bytes: %d bytes, maximum is %d bytes.\n", c + tcp_opt_len[i], TCPOPT_BUFLEN);
       exit (EXIT_FAILURE);
     }
     memcpy (tcp_opt_buf + c, tcp_options[i], tcp_opt_len[i]);
@@ -292,8 +292,8 @@ main (void) {
 
   // Pad to the next 4-byte boundary.
   while ((tcp_buf_len%4) != 0) {
-    if (tcp_buf_len >= TCP_MAX_OPTLEN) {
-      fprintf (stderr, "Too many TCP option bytes after padding: %d bytes, maximum is %d bytes.\n", tcp_buf_len + 1, TCP_MAX_OPTLEN);
+    if (tcp_buf_len >= TCPOPT_BUFLEN) {
+      fprintf (stderr, "Too many TCP option bytes after padding: %d bytes, maximum is %d bytes.\n", tcp_buf_len + 1, TCPOPT_BUFLEN);
       exit (EXIT_FAILURE);
     }
     tcp_opt_buf[tcp_buf_len] = 0;

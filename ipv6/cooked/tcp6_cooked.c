@@ -43,7 +43,7 @@
 // Define some constants.
 #define IP6_HDRLEN 40         // IPv6 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -72,7 +72,7 @@ main (void) {
   // Allocate memory for various arrays.
   datagram = allocate_ustrmem (IP_MAXPACKET);
   interface = allocate_strmem (IFNAMSIZ);
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
 
@@ -90,7 +90,7 @@ main (void) {
   snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));

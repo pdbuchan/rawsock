@@ -35,8 +35,7 @@
 #include <errno.h>            // errno, perror()
 
 // Define some constants.
-#define TLLA_OPTLEN 8         // Target Link-Layer Address option length.
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define TLLA_OPTLEN 8         // Target Link-Layer Address option length
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -73,7 +72,7 @@ main (void) {
   // Interface to send datagram through.
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
-  // Source (node sending advertisement) IPv6 link-local address: you need to fill this out
+  // Source (node sending advertisement) IPv6 link-local address: You need to fill this out.
   snprintf (source, INET6_ADDRSTRLEN, "fe80::");
 
   // Destination IPv6 address either:
@@ -104,7 +103,7 @@ main (void) {
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
-    return (EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
   memset (&dst, 0, sizeof (dst));
   memcpy (&dst, res->ai_addr, res->ai_addrlen);
@@ -156,10 +155,10 @@ main (void) {
   nahdr.nd_na_hdr.icmp6_code = 0;
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
-  nahdr.nd_na_hdr.icmp6_cksum = htons(0);
+  nahdr.nd_na_hdr.icmp6_cksum = htons (0);
 
-  // R/S/O flags (32 bits): R = 0, S = 1, O = 1. Set Reserved bits to zero (RFC 4861)
-  nahdr.nd_na_flags_reserved = htonl((1 << 30) + (1 << 29));
+  // R/S/O flags (32 bits): R = 0, S = 1, O = 1. Set Reserved bits to zero (RFC 4861).
+  nahdr.nd_na_flags_reserved = htonl ((1 << 30) + (1 << 29));
 
   // Target address (as type in6_addr) (16 bytes)
   nahdr.nd_na_target = src.sin6_addr;

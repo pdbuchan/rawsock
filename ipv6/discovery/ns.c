@@ -38,7 +38,7 @@
 
 // Define some constants.
 #define SLLA_OPTLEN 8         // Source Link-Layer Address option length.
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -53,7 +53,7 @@ main (void) {
   ssize_t bytes;
   struct addrinfo hints;
   struct addrinfo *res;
-  struct sockaddr_in6 *ipv6, src, dst, dst_snmc;
+  struct sockaddr_in6 src, dst, dst_snmc;
   struct ip6_hdr iphdr;
   struct nd_neighbor_solicit nshdr;
   struct msghdr msghdr;
@@ -62,7 +62,6 @@ main (void) {
   struct in6_pktinfo *pktinfo;
   struct iovec iov;
   char *target, *source, *interface;
-  void *tmp;
 
   memset (&iphdr, 0, sizeof (iphdr));
   memset (&nshdr, 0, sizeof (nshdr));
@@ -70,10 +69,10 @@ main (void) {
 
   // Allocate memory for various arrays.
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);  // Can be hostname or IPv6 address.
+  target = allocate_strmem (HOSTNAME_LEN);
   source = allocate_strmem (INET6_ADDRSTRLEN);
 
-  // Interface to send packet through.
+  // Interface to send datagram through.
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
   // Source IPv6 unicast address of the node sending the solicitation.
@@ -82,7 +81,7 @@ main (void) {
 
   // Target hostname or IPv6 address of the node whose link-layer address we're trying to resolve.
   // You need to fill this out.
-  snprintf (target, TEXT_STRINGLEN, "target");
+  snprintf (target, HOSTNAME_LEN, "target");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -93,7 +92,7 @@ main (void) {
   // Resolve source using getaddrinfo().
   if ((status = getaddrinfo (source, NULL, &hints, &res)) != 0) {
     fprintf (stderr, "getaddrinfo() failed for source.\nError message: %s\n", gai_strerror (status));
-    return (EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
   memset (&src, 0, sizeof (src));
   memcpy (&src, res->ai_addr, res->ai_addrlen);
@@ -110,10 +109,8 @@ main (void) {
   memcpy (&dst_snmc, res->ai_addr, res->ai_addrlen); 
 
   // Report target's unicast address.
-  ipv6 = (struct sockaddr_in6 *) res->ai_addr;
-  tmp = &(ipv6->sin6_addr);
-  memset (target, 0, INET6_ADDRSTRLEN * sizeof (char));
-  if (inet_ntop (AF_INET6, tmp, target, INET6_ADDRSTRLEN) == NULL) {
+  memset (target, 0, INET6_ADDRSTRLEN);
+  if (inet_ntop (AF_INET6, &dst.sin6_addr, target, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for target's unicast address.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
@@ -136,10 +133,8 @@ main (void) {
   iphdr.ip6_dst = dst_snmc.sin6_addr;
 
   // Report target's solicited-node multicast address.
-  ipv6 = (struct sockaddr_in6 *) &dst_snmc;
-  tmp = &(ipv6->sin6_addr);
-  memset (target, 0, INET6_ADDRSTRLEN * sizeof (char));
-  if (inet_ntop (AF_INET6, tmp, target, INET6_ADDRSTRLEN) == NULL) {
+  memset (target, 0, INET6_ADDRSTRLEN);
+  if (inet_ntop (AF_INET6, &dst_snmc.sin6_addr, target, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for target's solicited-node multicast address.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
@@ -191,10 +186,10 @@ main (void) {
   nshdr.nd_ns_hdr.icmp6_code = 0;
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
-  nshdr.nd_ns_hdr.icmp6_cksum = htons(0);
+  nshdr.nd_ns_hdr.icmp6_cksum = htons (0);
 
   // Reserved (32 bits): Must be set to zero.
-  nshdr.nd_ns_reserved = htonl(0);
+  nshdr.nd_ns_reserved = htonl (0);
 
   // Target address (16 bytes): Unicast (not multicast) IPv6 address of the device whose link-layer address we're trying to resolve.
   nshdr.nd_ns_target = dst.sin6_addr;
@@ -239,7 +234,7 @@ main (void) {
   cmsghdr1->cmsg_len = CMSG_LEN (sizeof (int));
   *(int *) CMSG_DATA (cmsghdr1) = hoplimit;
 
-  // Specify source interface index for this packet via cmsghdr data.
+  // Specify source interface index for this datagram via cmsghdr data.
   cmsghdr2 = CMSG_NXTHDR (&msghdr, cmsghdr1);
   cmsghdr2->cmsg_level = IPPROTO_IPV6;
   cmsghdr2->cmsg_type = IPV6_PKTINFO;  // We want to specify interface here.

@@ -42,12 +42,12 @@
 #include <errno.h>            // errno, perror()
 
 // Define some constants.
-#define ETH_HDRLEN ETH_HLEN  // Ethernet header length
-#define IP4_HDRLEN 20        // IPv4 header length
-#define TCP_HDRLEN 20        // TCP header length, excludes options data
-#define IP_MAX_OPTLEN 40     // Maximum length of IP header option
-#define TCP_MAX_OPTLEN 40    // Maximum length of TCP header option
-#define TEXT_STRINGLEN 80    // Maximum number of characters in a string
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define IP4_HDRLEN 20         // IPv4 header length
+#define TCP_HDRLEN 20         // TCP header length, excludes options data
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
+#define IP4OPT_BUFLEN 40      // Maximum IPv4 options length
+#define TCPOPT_BUFLEN 40      // Maximum TCP options length
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -80,11 +80,11 @@ main (void) {
   src_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
-  ip_options = allocate_ustrmem (IP_MAX_OPTLEN);
-  tcp_options = allocate_ustrmem (TCP_MAX_OPTLEN);
+  ip_options = allocate_ustrmem (IP4OPT_BUFLEN);
+  tcp_options = allocate_ustrmem (TCPOPT_BUFLEN);
 
   // Random number seed
   srand ((unsigned) time (NULL));
@@ -130,7 +130,7 @@ main (void) {
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -437,12 +437,12 @@ ip4_checksum (struct ip iphdr, uint8_t *options, int opt_len) {
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy IPv4 header into buf (20 bytes)
-  memcpy (ptr, &iphdr, IP4_HDRLEN * sizeof (char));
+  memcpy (ptr, &iphdr, IP4_HDRLEN);
   ptr += IP4_HDRLEN;
   chksumlen += IP4_HDRLEN;
 
   // Copy IP options into buf (variable length)
-  memcpy (ptr, options, opt_len * sizeof (char));
+  memcpy (ptr, options, opt_len);
   ptr += opt_len;
   chksumlen += opt_len;
 

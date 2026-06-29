@@ -39,7 +39,7 @@
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t icmp4_checksum (uint8_t *, int);
@@ -68,7 +68,7 @@ main (void) {
   icmpdata = allocate_ustrmem (IP_MAXPACKET);
   datagram = allocate_ustrmem (IP_MAXPACKET);
   interface = allocate_strmem (IFNAMSIZ);
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
 
@@ -82,7 +82,7 @@ main (void) {
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

@@ -48,7 +48,6 @@ typedef struct {
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length
 #define ICMP_HDRLEN 8         // IPv4 ICMP header length excluding data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -100,13 +99,13 @@ main (void) {
   addrs = allocate_strmemp (icmphdr.num_addrs);
   addru = allocate_ustrmemp (icmphdr.num_addrs);
   for (i = 0; i < icmphdr.num_addrs; i++) {
-    addrs[i] = allocate_strmem (TEXT_STRINGLEN);
+    addrs[i] = allocate_strmem (INET_ADDRSTRLEN);
     addru[i] = allocate_ustrmem (4);
   }
   pref = allocate_int32mem (icmphdr.num_addrs);
 
   // Router Address 1: You need to enter an IPv4 address.
-  snprintf (addrs[0], TEXT_STRINGLEN, "192.168.1.1");
+  snprintf (addrs[0], INET_ADDRSTRLEN, "192.168.1.1");
 
   // Router Address 1 Preference Level (32 bit two's complement value): You need to fill this out.
   // When more than one Router Address is present, this indicates which

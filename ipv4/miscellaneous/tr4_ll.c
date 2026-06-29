@@ -47,13 +47,13 @@
 #include <errno.h>            // errno, perror()
 
 // Define some constants.
-#define ETH_HDRLEN ETH_HLEN  // Ethernet header length
-#define IP4_HDRLEN 20        // IPv4 header length
-#define TCP_HDRLEN 20        // TCP header length, excludes options data
-#define UDP_HDRLEN 8         // UDP header length, excludes data
-#define ICMP_HDRLEN 8        // ICMP header length for echo request, excludes data
-#define TIMEOUT 2            // Time for receive socket to wait for a reply (s)
-#define TEXT_STRINGLEN 80    // Maximum number of characters in a string
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define IP4_HDRLEN 20         // IPv4 header length
+#define TCP_HDRLEN 20         // TCP header length, excludes options data
+#define UDP_HDRLEN 8          // UDP header length, excludes data
+#define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
+#define TIMEOUT 2             // Time for receive socket to wait for a reply (s)
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -125,12 +125,12 @@ main (void) {
   snd_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   rec_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
 
   // Payloads for TCP, UDP, and ICMP packets.
-  memset (tcp_dat, 0, IP_MAXPACKET * sizeof (char));  // No TCP data
+  memset (tcp_dat, 0, IP_MAXPACKET);  // No TCP data
   snprintf (icmp_dat, IP_MAXPACKET, "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_");  // Seems to be commonly used, but unnecessary I think
   snprintf (udp_dat, IP_MAXPACKET, "@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_");  // Seems to be commonly used, but unnecessary I think
 
@@ -190,7 +190,7 @@ main (void) {
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

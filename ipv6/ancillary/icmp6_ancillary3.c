@@ -37,7 +37,7 @@
 
 // Define some constants.
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -67,7 +67,7 @@ main (void) {
 
   // Allocate memory for various arrays.
   source = allocate_strmem (INET6_ADDRSTRLEN);
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
 
   // Interface to send datagram through.
@@ -100,7 +100,7 @@ main (void) {
   snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, TEXT_STRINGLEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
