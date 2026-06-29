@@ -122,7 +122,7 @@ main (void) {
 
     // If pfd has POLLIN set in revents, then sd (i.e., pfd.fd) is ready for reading.
     if (pfd.revents & POLLIN) {
-      memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+      memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
       if ((bytes = recv (sd, ether_frame, ETH_HDRLEN + IP_MAXPACKET, 0)) < 0) {
         if (errno == EINTR) {
           continue;  // System call interrupted by a signal before completion. Retry.

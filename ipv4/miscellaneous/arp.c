@@ -111,10 +111,10 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
 
   // Set destination MAC address: broadcast address
-  memset (dst_mac, 0xff, 6 * sizeof (uint8_t));
+  memset (dst_mac, 0xff, 6);
 
   // Source IPv4 address: you need to fill this out
   snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
@@ -144,7 +144,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   ipv4 = (struct sockaddr_in *) res->ai_addr;
-  memcpy (&send_arphdr.target_ip, &ipv4->sin_addr, 4 * sizeof (uint8_t));
+  memcpy (&send_arphdr.target_ip, &ipv4->sin_addr, 4);
   freeaddrinfo (res);
 
   // Fill out device's sockaddr_ll struct.
@@ -157,7 +157,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // ARP header
@@ -178,13 +178,13 @@ main (void) {
   send_arphdr.opcode = htons (ARPOP_REQUEST);
 
   // Sender hardware address (48 bits): MAC address
-  memcpy (&send_arphdr.sender_mac, src_mac, 6 * sizeof (uint8_t));
+  memcpy (&send_arphdr.sender_mac, src_mac, 6);
 
   // Sender protocol address (32 bits)
   // See getaddrinfo() resolution of src_ip.
 
   // Target hardware address (48 bits): zero, since we don't know it yet.
-  memset (&send_arphdr.target_mac, 0, 6 * sizeof (uint8_t));
+  memset (&send_arphdr.target_mac, 0, 6);
 
   // Target protocol address (32 bits)
   // See getaddrinfo() resolution of target.
@@ -195,8 +195,8 @@ main (void) {
   frame_length = ETH_HDRLEN + ARP_ETH_IPV4_LEN;
 
   // Destination and Source MAC addresses
-  memcpy (ether_frame, dst_mac, 6 * sizeof (uint8_t));
-  memcpy (ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+  memcpy (ether_frame, dst_mac, 6);
+  memcpy (ether_frame + 6, src_mac, 6);
 
   // Next is ethernet type code (ETH_P_ARP for ARP).
   // http://www.iana.org/assignments/ethernet-numbers
@@ -206,7 +206,7 @@ main (void) {
   // Next is ethernet frame data (ARP header).
 
   // ARP header
-  memcpy (ether_frame + ETH_HDRLEN, &send_arphdr, ARP_ETH_IPV4_LEN * sizeof (uint8_t));
+  memcpy (ether_frame + ETH_HDRLEN, &send_arphdr, ARP_ETH_IPV4_LEN);
 
   // Submit request for a raw socket descriptor.
   if ((recvsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ARP))) < 0) {
@@ -288,7 +288,7 @@ main (void) {
   timeout = 2000;  // Milliseconds
   pfd.fd = recvsd;
   pfd.events = POLLIN;
-  memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+  memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
   recv_arphdr = (ARP_HDR *) (ether_frame + ETH_HDRLEN);
   for (;;) {
     status = poll (&pfd, 1, timeout);
@@ -306,7 +306,7 @@ main (void) {
 
     // If pfd has POLLIN set in revents, then recvsd (i.e., pfd.fd) is ready for reading.
     if (pfd.revents & POLLIN) {
-      memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+      memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
       if ((bytes = recv (recvsd, ether_frame, ETH_HDRLEN + ARP_ETH_IPV4_LEN, 0)) < 0) {
         if (errno == EINTR) {
           continue;  // System call interrupted by a signal before completion. Retry.
@@ -330,9 +330,9 @@ main (void) {
         (recv_arphdr->hlen == 6) &&
         (recv_arphdr->plen == 4) &&
         (ntohs (recv_arphdr->opcode) == ARPOP_REPLY) &&
-        (memcmp (recv_arphdr->sender_ip, send_arphdr.target_ip, 4 * sizeof (uint8_t)) == 0) &&
-        (memcmp (recv_arphdr->target_ip, send_arphdr.sender_ip, 4 * sizeof (uint8_t)) == 0) &&
-        (memcmp (recv_arphdr->target_mac, src_mac, 6 * sizeof (uint8_t)) == 0)) {
+        (memcmp (recv_arphdr->sender_ip, send_arphdr.target_ip, 4) == 0) &&
+        (memcmp (recv_arphdr->target_ip, send_arphdr.sender_ip, 4) == 0) &&
+        (memcmp (recv_arphdr->target_mac, src_mac, 6) == 0)) {
         break;
       }
     }

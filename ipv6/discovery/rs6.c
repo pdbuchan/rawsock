@@ -64,7 +64,7 @@ main (int argc, char **argv) {
   struct ifreq ifr;
   struct cmsghdr *cmsghdr1, *cmsghdr2;
   pktinfo6 *pktinfo;
-  struct iovec iov[2];
+  struct iovec iov;
   char *target, *source, *interface;
   void *tmp;
 
@@ -193,11 +193,12 @@ main (int argc, char **argv) {
   memset (&msghdr, 0, sizeof (msghdr));
   msghdr.msg_name = &dst;  // Destination IPv6 address (as struct sockaddr_in6)
   msghdr.msg_namelen = sizeof (dst);
+
   memset (&iov, 0, sizeof (iov));
-  iov[0].iov_base = (uint8_t *) outpack;  // Point msghdr to buffer outpack
-  iov[0].iov_len = RS_HDRLEN + optlen;
-  msghdr.msg_iov = iov;                 // scatter/gather array
-  msghdr.msg_iovlen = 1;                // number of elements in scatter/gather array
+  iov.iov_base = (uint8_t *) outpack;  // Point msghdr to buffer outpack
+  iov.iov_len = RS_HDRLEN + optlen;
+  msghdr.msg_iov = &iov;  // Scatter/gather array (If sending multiple buffers at once, iov would be an array.)
+  msghdr.msg_iovlen = 1;  // Number of elements in scatter/gather array
 
   // Tell msghdr we're adding cmsghdr data to change hop limit and specify interface.
   // Allocate some memory for our cmsghdr data.
@@ -211,7 +212,7 @@ main (int argc, char **argv) {
   cmsghdr1->cmsg_level = IPPROTO_IPV6;
   cmsghdr1->cmsg_type = IPV6_HOPLIMIT;  // We want to change hop limit
   cmsghdr1->cmsg_len = CMSG_LEN (sizeof (int));
-  *((int *) CMSG_DATA (cmsghdr1)) = hoplimit;
+  *(int *) CMSG_DATA (cmsghdr1) = hoplimit;
 
   // Specify source interface index for this packet via cmsghdr data.
   cmsghdr2 = CMSG_NXTHDR (&msghdr, cmsghdr1);

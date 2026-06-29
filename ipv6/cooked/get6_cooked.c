@@ -129,7 +129,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // IPv6 header
@@ -234,13 +234,13 @@ main (void) {
   datagram_length = IP6_HDRLEN + TCP_HDRLEN + tcp_datalen;
 
   // IPv6 header
-  memcpy (datagram, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram, &iphdr, IP6_HDRLEN);
 
   // TCP header
-  memcpy (datagram + IP6_HDRLEN, &tcphdr, TCP_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN, &tcphdr, TCP_HDRLEN);
 
   // TCP data
-  memcpy (datagram + IP6_HDRLEN + TCP_HDRLEN, tcp_data, tcp_datalen * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN + TCP_HDRLEN, tcp_data, tcp_datalen);
 
   // Open raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_ALL))) < 0) {

@@ -28,7 +28,6 @@
 
 #include <sys/socket.h>       // struct msghdr
 #include <netinet/in.h>       // IPPROTO_IPV6, IPPROTO_ICMPV6
-#include <netinet/ip.h>       // IP_MAXPACKET (which is 65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/icmp6.h>    // struct icmp6_hdr, ICMP6_ECHO_REQUEST
 #include <netdb.h>            // struct addrinfo
@@ -54,14 +53,13 @@ main (void) {
   char *interface, *target, *source;
   struct ip6_hdr iphdr;
   struct icmp6_hdr icmphdr;
-  uint8_t *icmpdata, *icmp_msg;
   struct addrinfo hints, *res;
   struct sockaddr_in6 src, dst;
   socklen_t srclen;
   struct ifreq ifr;
   struct msghdr msghdr;
   struct cmsghdr *cmsghdr;
-  struct iovec iov[1];
+  struct iovec iov;
 
   memset (&iphdr, 0, sizeof (iphdr));
   memset (&icmphdr, 0, sizeof (icmphdr));
@@ -71,8 +69,6 @@ main (void) {
   source = allocate_strmem (INET6_ADDRSTRLEN);
   target = allocate_strmem (TEXT_STRINGLEN);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  icmpdata = allocate_ustrmem (IP_MAXPACKET);
-  icmp_msg = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send datagram through.
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
@@ -107,7 +103,7 @@ main (void) {
   memset (&src, 0, sizeof (src));
   memcpy (&src, res->ai_addr, res->ai_addrlen);
   srclen = res->ai_addrlen;
-  memcpy (&iphdr.ip6_src, src.sin6_addr.s6_addr, 16 * sizeof (uint8_t));
+  iphdr.ip6_src = src.sin6_addr;
   freeaddrinfo (res);
 
   // Resolve target using getaddrinfo().
@@ -117,7 +113,7 @@ main (void) {
   }
   memset (&dst, 0, sizeof (dst));
   memcpy (&dst, res->ai_addr, res->ai_addrlen);
-  memcpy (&iphdr.ip6_dst, dst.sin6_addr.s6_addr, 16 * sizeof (uint8_t));
+  iphdr.ip6_dst = dst.sin6_addr;
   freeaddrinfo (res);
 
   // ICMP header
@@ -138,16 +134,14 @@ main (void) {
   icmphdr.icmp6_seq = htons (0);
 
   // ICMP data
-  icmpdata[0] = (uint8_t) 'T';
-  icmpdata[1] = (uint8_t) 'e';
-  icmpdata[2] = (uint8_t) 's';
-  icmpdata[3] = (uint8_t) 't';
-  icmp_datalen = 4;
+  uint8_t icmp_data[4] = {'T', 'e', 's', 't'};
+  icmp_datalen = sizeof (icmp_data);
 
   // Build ICMP message for ICMP checksum calculation.
-  memset (icmp_msg, 0, IP_MAXPACKET * sizeof (uint8_t));
-  memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
-  memcpy (icmp_msg + ICMP_HDRLEN, icmpdata, icmp_datalen * sizeof (uint8_t));
+  uint8_t icmp_msg[ICMP_HDRLEN + sizeof (icmp_data)];
+  memset (icmp_msg, 0, sizeof (icmp_msg));
+  memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);
+  memcpy (icmp_msg + ICMP_HDRLEN, icmp_data, icmp_datalen);
 
   // Compose the msghdr structure.
   memset (&msghdr, 0, sizeof (msghdr));
@@ -155,13 +149,12 @@ main (void) {
   msghdr.msg_namelen = sizeof (dst);  // size of socket address structure
 
   memset (&iov, 0, sizeof (iov));
-  iov[0].iov_base = (uint8_t *) icmp_msg;
-  iov[0].iov_len = ICMP_HDRLEN + icmp_datalen;
-  msghdr.msg_iov = iov;   // scatter/gather array
-  msghdr.msg_iovlen = 1;  // number of elements in scatter/gather array
+  iov.iov_base = (uint8_t *) icmp_msg;
+  iov.iov_len = sizeof (icmp_msg);
+  msghdr.msg_iov = &iov;  // Scatter/gather array (If sending multiple buffers at once, iov would be an array.)
+  msghdr.msg_iovlen = 1;  // Number of elements in scatter/gather array
 
-  // Initialize msghdr and control data to total length of the message to be sent.
-  // Allocate some memory for our cmsghdr data.
+  // Allocate ancillary control data for the Hop Limit control message.
   cmsglen = CMSG_SPACE (sizeof (int));
   msghdr.msg_control = allocate_ustrmem (cmsglen);
   msghdr.msg_controllen = cmsglen;
@@ -172,11 +165,11 @@ main (void) {
   cmsghdr->cmsg_level = IPPROTO_IPV6;
   cmsghdr->cmsg_type = IPV6_HOPLIMIT;  // We want to change hop limit in this example.
   cmsghdr->cmsg_len = CMSG_LEN (sizeof (int));
-  *((int *) CMSG_DATA (cmsghdr)) = hoplimit;
+  *(int *) CMSG_DATA (cmsghdr) = hoplimit;
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
-  icmphdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, ICMP_HDRLEN + icmp_datalen);
+  icmphdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, sizeof (icmp_msg));
   memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
   fprintf (stdout, "Checksum: 0x%x\n", ntohs (icmphdr.icmp6_cksum));
 
@@ -208,8 +201,9 @@ main (void) {
     fprintf (stderr, "sendmsg() failed.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
-  if (bytes != (ICMP_HDRLEN + icmp_datalen)) {
-    fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %d bytes.\n", bytes, ICMP_HDRLEN + icmp_datalen);
+  // Check for short send.
+  if (bytes != (ssize_t) sizeof (icmp_msg)) {
+    fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %zd bytes.\n", bytes, (ssize_t) sizeof (icmp_msg));
     exit (EXIT_FAILURE);
   }
   close (sd);
@@ -218,8 +212,6 @@ main (void) {
   free (source);
   free (target);
   free (interface);
-  free (icmpdata);
-  free (icmp_msg);
   free (msghdr.msg_control);
 
   return (EXIT_SUCCESS);

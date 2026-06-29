@@ -121,7 +121,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // ICMP data

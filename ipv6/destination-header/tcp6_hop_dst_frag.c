@@ -183,7 +183,7 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
@@ -358,7 +358,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // Get TCP data.
@@ -573,7 +573,7 @@ main (void) {
   if (dst_nopt > 0) {
 
     // Copy destination extension header (without options) to ethernet frame.
-    memcpy (fragbuffer + c, &dsthdr, DST_HDRLEN * sizeof (uint8_t));
+    memcpy (fragbuffer + c, &dsthdr, DST_HDRLEN);
     c += DST_HDRLEN;
     indx += DST_HDRLEN;
 
@@ -583,7 +583,7 @@ main (void) {
       option_pad (&indx, fragbuffer, &c, dst_x[j], dst_y[j]);
 
       // Copy destination option to ethernet frame.
-      memcpy (fragbuffer + c, dst_options[j], dst_optlen[j] * sizeof (uint8_t));
+      memcpy (fragbuffer + c, dst_options[j], dst_optlen[j]);
       c += dst_optlen[j];
       indx += dst_optlen[j];
     }
@@ -592,11 +592,11 @@ main (void) {
     option_pad (&indx, fragbuffer, &c, 8, 0);
   }
   // TCP header
-  memcpy (fragbuffer + c, &tcphdr, TCP_HDRLEN * sizeof (uint8_t));
+  memcpy (fragbuffer + c, &tcphdr, TCP_HDRLEN);
   c += TCP_HDRLEN;
 
   // TCP data
-  memcpy (fragbuffer + c, tcp_data, tcp_datalen * sizeof (uint8_t));
+  memcpy (fragbuffer + c, tcp_data, tcp_datalen);
   c += tcp_datalen;
 
   // Submit request for a raw socket descriptor.
@@ -610,7 +610,7 @@ main (void) {
   for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
-    memset (ether_frame, 0, IP_MAXPACKET * sizeof (uint8_t));
+    memset (ether_frame, 0, IP_MAXPACKET);
 
     // Index of ethernet frame.
     c = 0;
@@ -618,8 +618,8 @@ main (void) {
     // Fill out ethernet frame header.
 
     // Copy destination and source MAC addresses to ethernet frame.
-    memcpy (ether_frame, dst_mac, 6 * sizeof (uint8_t));
-    memcpy (ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+    memcpy (ether_frame, dst_mac, 6);
+    memcpy (ether_frame + 6, src_mac, 6);
 
     // Next is ethernet type code (ETH_P_IPV6 for IPv6).
     // http://www.iana.org/assignments/ethernet-numbers
@@ -638,7 +638,7 @@ main (void) {
     }
 
     // Copy IPv6 header to ethernet frame.
-    memcpy (ether_frame + c, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
+    memcpy (ether_frame + c, &iphdr, IP6_HDRLEN);
     c += IP6_HDRLEN;
 
     // Add hop-by-hop header and options, if specified.
@@ -646,7 +646,7 @@ main (void) {
     if (hbh_nopt > 0) {
 
       // Copy hop-by-hop extension header (without options) to ethernet frame.
-      memcpy (ether_frame + c, &hophdr, HOP_HDRLEN * sizeof (uint8_t));
+      memcpy (ether_frame + c, &hophdr, HOP_HDRLEN);
       c += HOP_HDRLEN;
       indx += HOP_HDRLEN;
 
@@ -656,7 +656,7 @@ main (void) {
         option_pad (&indx, ether_frame, &c, hbh_x[j], hbh_y[j]);
 
         // Copy hop-by-hop option to ethernet frame.
-        memcpy (ether_frame + c, hbh_options[j], hbh_optlen[j] * sizeof (uint8_t));
+        memcpy (ether_frame + c, hbh_options[j], hbh_optlen[j]);
         c += hbh_optlen[j];
         indx += hbh_optlen[j];
       }
@@ -681,12 +681,12 @@ main (void) {
       }
       fraghdr.ip6f_offlg = htons ((offset[i] << 3) + frag_flags[0] + (frag_flags[1] <<1));
       fraghdr.ip6f_ident = htonl (31415);
-      memcpy (ether_frame + c, &fraghdr, FRG_HDRLEN * sizeof (uint8_t));
+      memcpy (ether_frame + c, &fraghdr, FRG_HDRLEN);
       c += FRG_HDRLEN;
     }
 
     // Copy fragmentable portion of packet to ethernet frame.
-    memcpy (ether_frame + c, fragbuffer + (offset[i] * 8), len[i] * sizeof (uint8_t));
+    memcpy (ether_frame + c, fragbuffer + (offset[i] * 8), len[i]);
     c += len[i];
 
     // Ethernet frame length
@@ -967,7 +967,7 @@ option_pad (int *indx, uint8_t *padding, int *c, int x, int y) {
     padding[*c] = needpad - 2;  // PadN length: N - 2
     (*indx)++;
     (*c)++;
-    memset (padding + (*c), 0, (needpad - 2) * sizeof (uint8_t));
+    memset (padding + (*c), 0, needpad - 2);
     (*indx) += needpad - 2;
     (*c) += needpad - 2;
   }

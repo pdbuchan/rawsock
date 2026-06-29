@@ -136,7 +136,7 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
@@ -184,7 +184,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // Number of IP options

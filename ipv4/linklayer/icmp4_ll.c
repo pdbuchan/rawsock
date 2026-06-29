@@ -155,7 +155,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // ICMP data
@@ -249,9 +249,9 @@ main (void) {
   icmphdr.icmp_cksum = 0;
 
   // Build ICMP message for ICMP checksum calculation.
-  memset (icmp_msg, 0, IP_MAXPACKET * sizeof (uint8_t));
-  memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
-  memcpy (icmp_msg + ICMP_HDRLEN, icmpdata, icmp_datalen * sizeof (uint8_t));
+  memset (icmp_msg, 0, IP_MAXPACKET);
+  memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);
+  memcpy (icmp_msg + ICMP_HDRLEN, icmpdata, icmp_datalen);
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.

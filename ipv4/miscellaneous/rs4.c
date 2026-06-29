@@ -169,16 +169,16 @@ main (void) {
   // Prepare datagram.
 
   // First part is an IPv4 header.
-  memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram, &iphdr, IP4_HDRLEN);
 
   // Next part of datagram is ICMP header.
   icmphdr.checksum = 0;  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
-  memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN);
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
   icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN);
-  memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN);
 
   // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it

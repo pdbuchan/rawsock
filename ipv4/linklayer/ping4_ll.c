@@ -163,7 +163,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // ICMP data
@@ -284,7 +284,7 @@ main (void) {
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum
   // Already set to 0 above.
   send_icmphdr.icmp_cksum = icmp4_checksum (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
-  memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // Save ICMP header with checksum to datagram.
+  memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
   // Submit request for a raw socket descriptor to send packets.
   if ((sendsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -316,7 +316,7 @@ main (void) {
     send_icmphdr.icmp_cksum = 0;
     memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN);
     send_icmphdr.icmp_cksum = icmp4_checksum (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
-    memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // Save ICMP header with checksum to datagram.
+    memcpy (send_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &send_icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
     // Send ethernet frame to socket.
     bytes = sendto (sendsd, send_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
@@ -343,7 +343,7 @@ main (void) {
     // RECEIVE LOOP
     for (;;) {
 
-      memset (recv_ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+      memset (recv_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
       memset (&from, 0, sizeof (from));
       fromlen = sizeof (from);
 

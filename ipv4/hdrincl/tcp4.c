@@ -238,10 +238,10 @@ main (void) {
   // Prepare IPv4 datagram.
 
   // First part is an IPv4 header.
-  memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram, &iphdr, IP4_HDRLEN);
 
   // Next part of datagram is upper layer protocol header.
-  memcpy ((datagram + IP4_HDRLEN), &tcphdr, TCP_HDRLEN * sizeof (uint8_t));
+  memcpy ((datagram + IP4_HDRLEN), &tcphdr, TCP_HDRLEN);
 
   // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it

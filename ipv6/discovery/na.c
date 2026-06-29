@@ -26,7 +26,6 @@
 
 #include <netinet/icmp6.h>    // struct nd_neighbor_advert, which contains icmp6_hdr, ND_NEIGHBOR_ADVERT
 #include <netinet/in.h>       // IPPROTO_IPV6, IPPROTO_ICMPV6
-#include <netinet/ip.h>       // IP_MAXPACKET (65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netdb.h>            // struct addrinfo
 #include <sys/ioctl.h>        // macro ioctl is defined
@@ -36,6 +35,7 @@
 #include <errno.h>            // errno, perror()
 
 // Define some constants.
+#define TLLA_OPTLEN 8         // Target Link-Layer Address option length.
 #define TEXT_STRINGLEN 80     // Maximum number of characters in a string
 
 // Function prototypes
@@ -47,19 +47,18 @@ uint8_t *allocate_ustrmem (int);
 int
 main (void) {
 
-  int i, n, sd, status, ifindex, icmp_datalen, cmsglen;
+  int i, n, sd, status, ifindex, cmsglen, hoplimit;
   ssize_t bytes;
   struct addrinfo hints;
   struct addrinfo *res;
   struct sockaddr_in6 src, dst;
   struct ip6_hdr iphdr;
   struct nd_neighbor_advert nahdr;
-  uint8_t *icmp_data, *icmp_msg, hoplimit;
   struct msghdr msghdr;
   struct ifreq ifr;
   struct cmsghdr *cmsghdr1, *cmsghdr2;
   struct in6_pktinfo *pktinfo;
-  struct iovec iov[1];
+  struct iovec iov;
   char *target, *source, *interface;
 
   memset (&iphdr, 0, sizeof (iphdr));
@@ -70,14 +69,12 @@ main (void) {
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (INET6_ADDRSTRLEN);
   source = allocate_strmem (INET6_ADDRSTRLEN);
-  icmp_data = allocate_ustrmem (1 + 1 + 6);  // Neighbor advertisement Type, Length, MAC address
-  icmp_msg = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send datagram through.
   snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
 
   // Source (node sending advertisement) IPv6 link-local address: you need to fill this out
-  strncpy (source, "fe80::", INET6_ADDRSTRLEN);
+  snprintf (source, INET6_ADDRSTRLEN, "fe80::");
 
   // Destination IPv6 address either:
   // 1) unicast address of node which sent solicitation, or if the
@@ -101,7 +98,7 @@ main (void) {
   }
   memset (&src, 0, sizeof (src));
   memcpy (&src, res->ai_addr, res->ai_addrlen);
-  memcpy (&iphdr.ip6_src, src.sin6_addr.s6_addr, 16 * sizeof (uint8_t));
+  iphdr.ip6_src = src.sin6_addr;
   freeaddrinfo (res);
 
   // Resolve target using getaddrinfo().
@@ -111,7 +108,7 @@ main (void) {
   }
   memset (&dst, 0, sizeof (dst));
   memcpy (&dst, res->ai_addr, res->ai_addrlen);
-  memcpy (&iphdr.ip6_dst, dst.sin6_addr.s6_addr, 16 * sizeof (uint8_t));
+  iphdr.ip6_dst = dst.sin6_addr;
   freeaddrinfo (res);
 
   // Request a socket descriptor sd.
@@ -161,25 +158,28 @@ main (void) {
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   nahdr.nd_na_hdr.icmp6_cksum = htons(0);
 
-  // Set R/S/O flags as: R = 0, S = 1, O = 1. Set reserved to zero (RFC 4861)
+  // R/S/O flags (32 bits): R = 0, S = 1, O = 1. Set Reserved bits to zero (RFC 4861)
   nahdr.nd_na_flags_reserved = htonl((1 << 30) + (1 << 29));
-  nahdr.nd_na_target = src.sin6_addr;          // Target address (as type in6_addr)
+
+  // Target address (as type in6_addr) (16 bytes)
+  nahdr.nd_na_target = src.sin6_addr;
 
   // ICMP data
 
   // Copy advertising MAC address into neighbor advertisement options buffer (i.e., icmp_data).
   // This Target Link-Layer Address option is commonly included in Neighbor Advertisements.
-  icmp_datalen = 8;  // Option Type (1 byte) + Length (1 byte) + Length of MAC address (6 bytes)
-  icmp_data[0] = 2;                 // Option Type - "target link layer address" (Section 4.6 of RFC 4861)
-  icmp_data[1] = icmp_datalen / 8;  // Option Length - units of 8 octets (RFC 4861)
+  uint8_t icmp_data[TLLA_OPTLEN];  // Target Link-Layer Address option.
+  icmp_data[0] = 2;  // Option Type - "target link layer address" (Section 4.6 of RFC 4861)
+  icmp_data[1] = TLLA_OPTLEN / 8;  // Option Length - units of 8 octets (RFC 4861)
   for (i = 0; i < 6; i++) {
     icmp_data[i + 2] = (uint8_t) ifr.ifr_addr.sa_data[i];
   }
 
   // Build ICMP message for ICMP checksum calculation.
-  memset (icmp_msg, 0, IP_MAXPACKET * sizeof (uint8_t));
-  memcpy (icmp_msg, &nahdr, sizeof (struct nd_neighbor_advert) * sizeof (uint8_t));
-  memcpy (icmp_msg + sizeof (struct nd_neighbor_advert), icmp_data, icmp_datalen * sizeof (uint8_t));
+  uint8_t icmp_msg[sizeof (struct nd_neighbor_advert) + sizeof (icmp_data)];
+  memset (icmp_msg, 0, sizeof (icmp_msg));
+  memcpy (icmp_msg, &nahdr, sizeof (struct nd_neighbor_advert));
+  memcpy (icmp_msg + sizeof (struct nd_neighbor_advert), icmp_data, sizeof (icmp_data));
 
   // Compose the msghdr structure.
   memset (&msghdr, 0, sizeof (msghdr));
@@ -187,34 +187,35 @@ main (void) {
   msghdr.msg_namelen = sizeof (dst);  // Size of socket address structure
 
   memset (&iov, 0, sizeof (iov));
-  iov[0].iov_base = (uint8_t *) icmp_msg;
-  iov[0].iov_len = sizeof (struct nd_neighbor_advert) + icmp_datalen;
-  msghdr.msg_iov = iov;   // scatter/gather array
-  msghdr.msg_iovlen = 1;  // number of elements in scatter/gather array
+  iov.iov_base = (uint8_t *) icmp_msg;
+  iov.iov_len = sizeof (icmp_msg);
+  msghdr.msg_iov = &iov;  // Scatter/gather array (If sending multiple buffers at once, iov would be an array.)
+  msghdr.msg_iovlen = 1;  // Number of elements in scatter/gather array
 
-  // Initialize msghdr and control data to total length of the message to be sent.
-  // Allocate some memory for our cmsghdr data.
+  // Allocate control-message buffer for hop limit and packet-info ancillary data.
   cmsglen = CMSG_SPACE (sizeof (int)) + CMSG_SPACE (sizeof (*pktinfo));
   msghdr.msg_control = allocate_ustrmem (cmsglen);
   msghdr.msg_controllen = cmsglen;
 
   // Change hop limit to 255 as required for neighbor advertisement (RFC 4861).
-  hoplimit = 255u;
+  hoplimit = 255;
   cmsghdr1 = CMSG_FIRSTHDR (&msghdr);
   cmsghdr1->cmsg_level = IPPROTO_IPV6;
   cmsghdr1->cmsg_type = IPV6_HOPLIMIT;  // We want to change hop limit.
   cmsghdr1->cmsg_len = CMSG_LEN (sizeof (int));
-  *((int *) CMSG_DATA (cmsghdr1)) = hoplimit;
+  *(int *) CMSG_DATA (cmsghdr1) = hoplimit;
 
-  // Specify source interface index for this packet via cmsghdr data.
+  // Specify source interface index and source IPv6 address via cmsghdr data.
   cmsghdr2 = CMSG_NXTHDR (&msghdr, cmsghdr1);
   cmsghdr2->cmsg_level = IPPROTO_IPV6;
   cmsghdr2->cmsg_type = IPV6_PKTINFO;  // We want to specify interface here.
   cmsghdr2->cmsg_len = CMSG_LEN (sizeof (*pktinfo));
   pktinfo = (struct in6_pktinfo *) CMSG_DATA (cmsghdr2);
+  memset (pktinfo, 0, sizeof (*pktinfo));
   pktinfo->ipi6_ifindex = ifindex;
+  pktinfo->ipi6_addr = src.sin6_addr;
 
-  nahdr.nd_na_hdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, sizeof (struct nd_neighbor_advert) + icmp_datalen);
+  nahdr.nd_na_hdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, sizeof (icmp_msg));
   memcpy (icmp_msg, &nahdr, sizeof (struct nd_neighbor_advert));  // Save ICMP header with checksum to datagram.
   fprintf (stdout, "Checksum: %x\n", ntohs (nahdr.nd_na_hdr.icmp6_cksum));
 
@@ -232,8 +233,9 @@ main (void) {
     fprintf (stderr, "sendmsg() failed.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
-  if (bytes != ((int) sizeof (struct nd_neighbor_advert) + icmp_datalen)) {
-    fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %d bytes.\n", bytes, (int) sizeof (struct nd_neighbor_advert) + icmp_datalen);
+  // Check for short send.
+  if (bytes != (ssize_t) sizeof (icmp_msg)) {
+    fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %zd bytes.\n", bytes, (ssize_t) sizeof (icmp_msg));
     exit (EXIT_FAILURE);
   }
   close (sd);
@@ -242,8 +244,6 @@ main (void) {
   free (interface);
   free (target);
   free (source);
-  free (icmp_data);
-  free (icmp_msg);
   free (msghdr.msg_control);
 
   return (EXIT_SUCCESS);

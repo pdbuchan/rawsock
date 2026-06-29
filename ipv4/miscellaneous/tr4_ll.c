@@ -174,7 +174,7 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
@@ -222,7 +222,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // Show target of traceroute.
@@ -301,26 +301,26 @@ main (void) {
   tcp_sport = htons (49152 + probe_index % 16384);  // Some random, high ephemeral port number; Some firewalls dislike packets claiming to originate from Port 80.
   icmpseq = htons (probe_index);  // ICMP sequence number (16 bits)
   udp_dport = htons (33434 + probe_index);  // UDP destination port (16 bits)
-  memset (snd_ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+  memset (snd_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
   switch (packet_type) {
 
     case 1:  // TCP
       datalen = strlen (tcp_dat);
-      memcpy (data, tcp_dat, datalen * sizeof (uint8_t));
+      memcpy (data, tcp_dat, datalen);
       create_tcp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, tcp_sport, node, data, datalen);
       frame_length = ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN + datalen;
       break;
 
     case 2:  // ICMP
       datalen = strlen (icmp_dat);
-      memcpy (data, icmp_dat, datalen * sizeof (uint8_t));
+      memcpy (data, icmp_dat, datalen);
       create_icmp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, icmpid, icmpseq, node, data, datalen);
       frame_length = ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN + datalen;
       break;
 
     case 3:  // UDP
       datalen = strlen (udp_dat);
-      memcpy (data, udp_dat, datalen * sizeof (uint8_t));
+      memcpy (data, udp_dat, datalen);
       create_udp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, udp_sport, udp_dport, node, data, datalen);
       frame_length = ETH_HDRLEN + IP4_HDRLEN + UDP_HDRLEN + datalen;
       break;
@@ -371,7 +371,7 @@ main (void) {
     // RECEIVE LOOP
     for (;;) {
 
-      memset (rec_ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+      memset (rec_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
       memset (&from, 0, sizeof (from));
       fromlen = sizeof (from);
 
@@ -771,8 +771,8 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Fill out ethernet frame header.
 
   // Destination and Source MAC addresses
-  memcpy (snd_ether_frame, dst_mac, 6 * sizeof (uint8_t));
-  memcpy (snd_ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+  memcpy (snd_ether_frame, dst_mac, 6);
+  memcpy (snd_ether_frame + 6, src_mac, 6);
 
   // Next is ethernet type code (ETH_P_IP for IPv4).
   // http://www.iana.org/assignments/ethernet-numbers
@@ -782,13 +782,13 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Next is ethernet frame data (IPv4 header + TCP header).
 
   // IPv4 header
-  memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
 
   // TCP header
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &tcphdr, TCP_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &tcphdr, TCP_HDRLEN);
 
   // TCP data
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN, data, datalen * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN, data, datalen);
 
   return (EXIT_SUCCESS);
 }
@@ -872,8 +872,8 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // Fill out ethernet frame header.
 
   // Destination and Source MAC addresses
-  memcpy (snd_ether_frame, dst_mac, 6 * sizeof (uint8_t));
-  memcpy (snd_ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+  memcpy (snd_ether_frame, dst_mac, 6);
+  memcpy (snd_ether_frame + 6, src_mac, 6);
 
   // Next is ethernet type code (ETH_P_IP for IPv4).
   // http://www.iana.org/assignments/ethernet-numbers
@@ -883,18 +883,18 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // Next is ethernet frame data (IPv4 header + ICMP header + ICMP data).
 
   // IPv4 header
-  memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
 
   // ICMP header
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);
 
   // ICMP data
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN, data, datalen * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN, data, datalen);
 
   // ICMP header checksum (16 bits): set to 0 when calculating checksum
   // Already set to 0 above.
   icmphdr.icmp_cksum = checksum ((uint8_t *) (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN), ICMP_HDRLEN + datalen);
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);
 
   return (EXIT_SUCCESS);
 }
@@ -976,8 +976,8 @@ create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Fill out ethernet frame header.
 
   // Destination and Source MAC addresses
-  memcpy (snd_ether_frame, dst_mac, 6 * sizeof (uint8_t));
-  memcpy (snd_ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+  memcpy (snd_ether_frame, dst_mac, 6);
+  memcpy (snd_ether_frame + 6, src_mac, 6);
 
   // Next is ethernet type code (ETH_P_IP for IPv4).
   // http://www.iana.org/assignments/ethernet-numbers
@@ -986,13 +986,13 @@ create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
 
   // Next is ethernet frame data (IPv4 header + UDP header + UDP data).
   // IPv4 header
-  memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
 
   // UDP header
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &udphdr, UDP_HDRLEN * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &udphdr, UDP_HDRLEN);
 
   // UDP data
-  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + UDP_HDRLEN, data, datalen * sizeof (uint8_t));
+  memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + UDP_HDRLEN, data, datalen);
 
   return (EXIT_SUCCESS);
 }

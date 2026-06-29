@@ -117,7 +117,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // ICMP data
@@ -184,13 +184,13 @@ main (void) {
   datagram_length = IP6_HDRLEN + ICMP_HDRLEN + icmp_datalen;
 
   // IPv6 header
-  memcpy (datagram, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram, &iphdr, IP6_HDRLEN);
 
   // ICMP header
-  memcpy (datagram + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN);
 
   // ICMP data
-  memcpy (datagram + IP6_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen * sizeof (uint8_t));
+  memcpy (datagram + IP6_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen);
 
   // ICMP header checksum (16 bits): set to 0 when calculating checksum
   // Already set to 0 above.

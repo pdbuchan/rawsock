@@ -54,7 +54,7 @@ main (int argc, char **argv) {
   uint8_t *inpack;
   int len;
   struct msghdr msghdr;
-  struct iovec iov[2];
+  struct iovec iov;
   uint8_t *opt, *pkt;
   char *interface, *destination;
   struct in6_addr dst;
@@ -73,11 +73,12 @@ main (int argc, char **argv) {
   memset (&msghdr, 0, sizeof (msghdr));
   msghdr.msg_name = NULL;
   msghdr.msg_namelen = 0;
+
   memset (&iov, 0, sizeof (iov));
-  iov[0].iov_base = (uint8_t *) inpack;
-  iov[0].iov_len = IP_MAXPACKET;
-  msghdr.msg_iov = iov;
-  msghdr.msg_iovlen = 1;
+  iov.iov_base = (uint8_t *) inpack;
+  iov.iov_len = IP_MAXPACKET;
+  msghdr.msg_iov = &iov;  // Scatter/gather array (If sending multiple buffers at once, iov would be an array.)
+  msghdr.msg_iovlen = 1;  // Number of elements in scatter/gather array
 
   msghdr.msg_control = allocate_ustrmem (IP_MAXPACKET);
   msghdr.msg_controllen = IP_MAXPACKET * sizeof (uint8_t);

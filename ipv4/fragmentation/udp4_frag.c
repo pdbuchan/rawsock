@@ -125,7 +125,7 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
@@ -173,7 +173,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // Get UDP data.
@@ -321,9 +321,9 @@ main (void) {
 
   // Build fragmentable portion of packet in buffer array.
   // UDP header
-  memcpy (buffer, &udphdr, UDP_HDRLEN * sizeof (uint8_t));
+  memcpy (buffer, &udphdr, UDP_HDRLEN);
   // UDP data
-  memcpy (buffer + UDP_HDRLEN, udp_data, udp_datalen * sizeof (uint8_t));
+  memcpy (buffer + UDP_HDRLEN, udp_data, udp_datalen);
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -336,13 +336,13 @@ main (void) {
   for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
-    memset (ether_frame, 0, (ETH_HDRLEN + IP_MAXPACKET) * sizeof (uint8_t));
+    memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
 
     // Fill out ethernet frame header.
 
     // Copy destination and source MAC addresses to ethernet frame.
-    memcpy (ether_frame, dst_mac, 6 * sizeof (uint8_t));
-    memcpy (ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+    memcpy (ether_frame, dst_mac, 6);
+    memcpy (ether_frame + 6, src_mac, 6);
 
     // Next is ethernet type code (ETH_P_IP for IPv4).
     // http://www.iana.org/assignments/ethernet-numbers
@@ -375,10 +375,10 @@ main (void) {
     iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
     // Copy IPv4 header to ethernet frame.
-    memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+    memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
 
     // Copy fragmentable portion of packet to ethernet frame.
-    memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN, buffer + (offset[i] * 8), len[i] * sizeof (uint8_t));
+    memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN, buffer + (offset[i] * 8), len[i]);
 
     // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + fragment)
     frame_length = ETH_HDRLEN + IP4_HDRLEN + len[i];

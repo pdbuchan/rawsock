@@ -216,11 +216,11 @@ main (void) {
   // Compose datagram
 
   // IPv4 header
-  memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));  // IPv4 header
+  memcpy (datagram, &iphdr, IP4_HDRLEN);  // IPv4 header
 
   // ICMP message (Router Advertisement)
   icmphdr.checksum = 0;  // IPv4 header checksum (16 bits): Set to 0 for checksum calculation.
-  memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // ICMP header
+  memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);  // ICMP header
   icmp_msglen = ICMP_HDRLEN;
   for (i = 0; i < (int) icmphdr.num_addrs; i++) {
     memcpy (datagram + IP4_HDRLEN + ICMP_HDRLEN + (i * 8), addru[i], sizeof (uint32_t));  // Router Address (32 bits)
@@ -232,12 +232,12 @@ main (void) {
   // Calculate IPv4 header checksum.
   iphdr.ip_len = htons (IP4_HDRLEN + icmp_msglen);
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);  // Was previously initialized to 0 above.
-  memcpy (datagram, &iphdr, IP4_HDRLEN * sizeof (uint8_t));  // Save IPv4 header with checksum to datagram.
+  memcpy (datagram, &iphdr, IP4_HDRLEN);  // Save IPv4 header with checksum to datagram.
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
   icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, icmp_msglen);
-  memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN * sizeof (uint8_t));  // Save ICMP header with checksum to datagram.
+  memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
   // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it

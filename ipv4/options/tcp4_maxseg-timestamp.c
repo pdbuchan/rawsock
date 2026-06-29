@@ -114,7 +114,7 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
@@ -162,7 +162,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6 * sizeof (uint8_t));
+  memcpy (device.sll_addr, dst_mac, 6);
   device.sll_halen = 6;
 
   // IP Options - Timestamp 
@@ -332,8 +332,8 @@ main (void) {
   frame_length = ETH_HDRLEN + IP4_HDRLEN + ip_opt_len + TCP_HDRLEN + tcp_opt_len;
 
   // Destination and Source MAC addresses
-  memcpy (ether_frame, dst_mac, 6 * sizeof (uint8_t));
-  memcpy (ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+  memcpy (ether_frame, dst_mac, 6);
+  memcpy (ether_frame + 6, src_mac, 6);
 
   // Next is ethernet type code (ETH_P_IP for IPv4).
   // http://www.iana.org/assignments/ethernet-numbers
@@ -343,16 +343,16 @@ main (void) {
   // Next is ethernet frame data (IPv4 header + IP options + TCP header + TCP options).
 
   // IPv4 header
-  memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN * sizeof (uint8_t));
+  memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
 
   // IP options
-  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN, ip_options, ip_opt_len * sizeof (uint8_t));
+  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN, ip_options, ip_opt_len);
 
   // TCP header
-  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN + ip_opt_len, &tcphdr, TCP_HDRLEN * sizeof (uint8_t));
+  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN + ip_opt_len, &tcphdr, TCP_HDRLEN);
 
   // TCP Options
-  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN + ip_opt_len + TCP_HDRLEN, tcp_options, tcp_opt_len * sizeof (uint8_t));
+  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN + ip_opt_len + TCP_HDRLEN, tcp_options, tcp_opt_len);
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
