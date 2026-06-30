@@ -81,7 +81,7 @@ main (void) {
   uint8_t *data;
   uint16_t tcp_sport, icmpid, icmpseq, udp_sport, udp_dport;
   struct addrinfo hints, *res;
-  struct sockaddr_in *dst, sa;
+  struct sockaddr_in dst, sa;
   struct sockaddr_ll device, from;
   struct ifreq ifr;
   struct ip *inner_ip;
@@ -92,7 +92,6 @@ main (void) {
   struct timespec t1, t2;
   struct pollfd pfd;
   double elapsed, remaining;
-  void *tmp;
 
   // Choose whether to resolve IPs to hostnames: 0 = do not resolve, 1 = resolve
   resolve = 0;
@@ -203,9 +202,9 @@ main (void) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
-  dst = (struct sockaddr_in *) res->ai_addr;
-  tmp = &(dst->sin_addr);
-  if (inet_ntop (AF_INET, tmp, dst_ip, INET_ADDRSTRLEN) == NULL) {
+  memset (&dst, 0, sizeof (dst));
+  memcpy (&dst, res->ai_addr, res->ai_addrlen);
+  if (inet_ntop (AF_INET, &dst.sin_addr, dst_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);

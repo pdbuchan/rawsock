@@ -64,14 +64,13 @@ main (void) {
   struct icmp send_icmphdr, *recv_icmphdr;
   uint8_t *src_mac, *send_ether_frame, *recv_ether_frame;
   struct addrinfo hints, *res;
-  struct sockaddr_in *ipv4;
+  struct sockaddr_in dst;
   struct sockaddr_ll device, from;
   struct ifreq ifr;
   socklen_t fromlen;
   struct timespec t1, t2;
   struct pollfd pfd;
   double elapsed, remaining;
-  void *tmp;
 
   memset (&send_iphdr, 0, sizeof (send_iphdr));
   memset (&send_icmphdr, 0, sizeof (send_icmphdr));
@@ -143,9 +142,9 @@ main (void) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
-  ipv4 = (struct sockaddr_in *) res->ai_addr;
-  tmp = &(ipv4->sin_addr);
-  if (inet_ntop (AF_INET, tmp, dst_ip, INET_ADDRSTRLEN) == NULL) {
+  memset (&dst, 0, sizeof (dst));
+  memcpy (&dst, res->ai_addr, res->ai_addrlen);
+  if (inet_ntop (AF_INET, &dst.sin_addr, dst_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);

@@ -29,7 +29,7 @@
 #include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_IP, IPPROTO_ICMP
 #include <netinet/ip.h>       // struct ip, IP_MAXPACKET (which is 65535)
 #include <netinet/ip_icmp.h>  // struct icmp, ICMP_ROUTERADVERT
-#include <arpa/inet.h>        // inet_pton(), inet_ntop()
+#include <arpa/inet.h>        // inet_pton()
 #include <net/if.h>           // struct ifreq, IFNAMSIZ
 #include <time.h>             // time()
 

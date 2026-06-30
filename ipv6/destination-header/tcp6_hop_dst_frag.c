@@ -111,10 +111,9 @@ main (void) {
   uint8_t *tcp_data, *fragbuffer, *src_mac, *ether_frame;
   uint32_t seq;
   struct addrinfo hints, *res;
-  struct sockaddr_in6 *ipv6;
+  struct sockaddr_in6 dst;
   struct sockaddr_ll device;
   struct ifreq ifr;
-  void *tmp;
   FILE *fi;
 
   memset (&iphdr, 0, sizeof (iphdr));
@@ -339,9 +338,9 @@ main (void) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
-  ipv6 = (struct sockaddr_in6 *) res->ai_addr;
-  tmp = &(ipv6->sin6_addr);
-  if (inet_ntop (AF_INET6, tmp, dst_ip, INET6_ADDRSTRLEN) == NULL) {
+  memset (&dst, 0, sizeof (dst));
+  memcpy (&dst, res->ai_addr, res->ai_addrlen);
+  if (inet_ntop (AF_INET6, &dst.sin6_addr, dst_ip, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
@@ -450,7 +449,7 @@ main (void) {
   // Next header (8 bits): Temporary value; final Next Header chain is set after the TCP checksum.
   iphdr.ip6_nxt = IPPROTO_TCP;
 
-  // Hop limit (8 bits): default to maximum value
+  // Hop limit (8 bits): Default to maximum value.
   iphdr.ip6_hops = 255;
 
   // Source IPv6 address (128 bits)

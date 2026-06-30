@@ -59,8 +59,7 @@ main (void) {
   struct udphdr udphdr;
   uint8_t *datagram;
   struct addrinfo hints, *res;
-  struct sockaddr_in *ipv4, sin;
-  void *tmp;
+  struct sockaddr_in dst, sin;
 
   memset (&iphdr, 0, sizeof (iphdr));
   memset (&udphdr, 0, sizeof (udphdr));
@@ -95,9 +94,9 @@ main (void) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
-  ipv4 = (struct sockaddr_in *) res->ai_addr;
-  tmp = &(ipv4->sin_addr);
-  if (inet_ntop (AF_INET, tmp, dst_ip, INET_ADDRSTRLEN) == NULL) {
+  memset (&dst, 0, sizeof (dst));
+  memcpy (&dst, res->ai_addr, res->ai_addrlen);
+  if (inet_ntop (AF_INET, &dst.sin_addr, dst_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
     fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
