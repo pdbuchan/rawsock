@@ -23,22 +23,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/socket.h>       // needed for socket()
+#include <sys/socket.h>       // socket()
 #include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_TCP, INET6_ADDRSTRLEN
 #include <netinet/ip.h>       // IP_MAXPACKET (which is 65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
 #include <netinet/tcp.h>      // struct tcphdr
-#include <arpa/inet.h>        // inet_pton() and inet_ntop()
+#include <arpa/inet.h>        // inet_pton(), inet_ntop()
 #include <linux/if_ether.h>   // ETH_P_IPV6
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
 #include <net/if.h>           // IFNAMSIZ
 #include <time.h>             // time()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define IP6_HDRLEN 40         // IPv6 header length

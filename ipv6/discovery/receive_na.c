@@ -29,14 +29,14 @@
 #include <netinet/icmp6.h>    // struct nd_neighbor_solicit/advert, which contains icmp6_hdr and ND_NEIGHBOR_ADVERT
 #include <netinet/in.h>       // IPPROTO_IPV6, IPPROTO_ICMPV6
 #include <netinet/ip.h>       // IP_MAXPACKET (65535)
-#include <arpa/inet.h>        // inet_pton() and inet_ntop()
+#include <arpa/inet.h>        // inet_ntop()
 #include <netdb.h>            // struct addrinfo
 #include <sys/socket.h>       // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
 #include <poll.h>             // poll()
 #include <time.h>             // clock_gettime()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define TIMEOUT 60000         // Request timeout in milliseconds

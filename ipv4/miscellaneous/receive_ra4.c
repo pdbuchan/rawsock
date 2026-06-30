@@ -21,19 +21,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
+#include <sys/socket.h>       // socket()
 #include <netinet/in.h>       // IPPROTO_RAW, IPPROTO_IP, IPPROTO_ICMP, INET_ADDRSTRLEN
-#include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
+#include <netinet/ip.h>       // struct ip, IP_MAXPACKET (which is 65535)
 #include <arpa/inet.h>        // inet_ntop()
-#include <sys/socket.h>       // needed for socket()
 #include <poll.h>             // poll()
 #include <time.h>             // clock_gettime()
 #include <netinet/ip_icmp.h>  // ICMP_ROUTERADVERT
 #include <linux/if_ether.h>   // ETH_HLEN, ETH_P_IP, ETH_P_ALL
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // ICMP header for Router Advertisement
 typedef struct {
@@ -75,7 +75,8 @@ main (void) {
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_IP))) < 0) {
-    perror ("socket() failed ");
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
@@ -127,7 +128,7 @@ main (void) {
         if (errno == EINTR) {
           continue;  // System call interrupted by a signal before completion. Retry.
         } else {
-          perror ("recv() failed:");
+          fprintf (stderr, "recv() failed.\nError message: %s\n", strerror (errno));
           exit (EXIT_FAILURE);
         }
       }

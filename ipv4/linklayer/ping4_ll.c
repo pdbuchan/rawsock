@@ -22,15 +22,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/socket.h>       // needed for socket()
+#include <sys/socket.h>       // socket()
 #include <netinet/in.h>       // IPPROTO_ICMP, INET_ADDRSTRLEN
-#include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
+#include <netinet/ip.h>       // struct ip, IP_MAXPACKET (which is 65535)
 #include <netinet/ip_icmp.h>  // struct icmp, ICMP_ECHO
-#include <arpa/inet.h>        // inet_pton() and inet_ntop()
+#include <arpa/inet.h>        // inet_pton(), inet_ntop()
 #include <sys/ioctl.h>        // macro ioctl is defined
 #include <net/if.h>           // struct ifreq
 #include <linux/if_ether.h>   // ETH_HLEN, ETH_P_IP, ETH_P_ALL
@@ -38,7 +38,7 @@
 #include <poll.h>             // poll()
 #include <time.h>             // clock_gettime()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
@@ -62,7 +62,7 @@ main (void) {
   char *interface, *target, *src_ip, *dst_ip, *rec_ip;
   struct ip send_iphdr, *recv_iphdr;
   struct icmp send_icmphdr, *recv_icmphdr;
-  uint8_t *icmpdata, *src_mac, *send_ether_frame, *recv_ether_frame;
+  uint8_t *src_mac, *send_ether_frame, *recv_ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device, from;
@@ -78,7 +78,6 @@ main (void) {
 
   // Allocate memory for various arrays.
   src_mac = allocate_ustrmem (6);
-  icmpdata = allocate_ustrmem (IP_MAXPACKET);
   send_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   recv_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
@@ -167,10 +166,7 @@ main (void) {
   device.sll_halen = 6;
 
   // ICMP data
-  icmpdata[0] = (uint8_t) 'T';
-  icmpdata[1] = (uint8_t) 'e';
-  icmpdata[2] = (uint8_t) 's';
-  icmpdata[3] = (uint8_t) 't';
+  uint8_t icmpdata[4] = {'T', 'e', 's', 't'};
   icmp_datalen = 4;
 
   // IPv4 header
@@ -483,7 +479,6 @@ main (void) {
 
   // Free allocated memory.
   free (src_mac);
-  free (icmpdata);
   free (send_ether_frame);
   free (recv_ether_frame);
   free (interface);

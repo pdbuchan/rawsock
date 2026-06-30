@@ -34,7 +34,7 @@
 #include <poll.h>             // poll()
 #include <time.h>             // clock_gettime()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define TIMEOUT 60000         // Request timeout in milliseconds

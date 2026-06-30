@@ -23,21 +23,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/socket.h>       // needed for socket()
+#include <sys/socket.h>       // socket()
 #include <netinet/in.h>       // IPPROTO_TCP, INET_ADDRSTRLEN
-#include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
+#include <netinet/ip.h>       // struct ip, IP_MAXPACKET (which is 65535)
 #include <netinet/tcp.h>      // struct tcphdr
-#include <arpa/inet.h>        // inet_pton() and inet_ntop()
+#include <arpa/inet.h>        // inet_pton(), inet_ntop()
 #include <net/if.h>           // IFNAMSIZ
 #include <linux/if_ether.h>   // ETH_P_IP
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
 #include <time.h>             // time()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length

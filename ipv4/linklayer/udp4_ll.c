@@ -23,22 +23,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/socket.h>       // needed for socket()
+#include <sys/socket.h>       // socket()
 #include <netinet/in.h>       // IPPROTO_UDP, INET_ADDRSTRLEN
-#include <netinet/ip.h>       // struct ip and IP_MAXPACKET (which is 65535)
+#include <netinet/ip.h>       // struct ip, IP_MAXPACKET (which is 65535)
 #include <netinet/udp.h>      // struct udphdr
-#include <arpa/inet.h>        // inet_pton() and inet_ntop()
+#include <arpa/inet.h>        // inet_pton(), inet_ntop()
 #include <sys/ioctl.h>        // macro ioctl is defined
 #include <net/if.h>           // struct ifreq
 #include <linux/if_ether.h>   // ETH_HLEN, ETH_P_IP, ETH_P_ALL
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
 #include <time.h>             // time()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
@@ -60,7 +60,7 @@ main (void) {
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct udphdr udphdr;
-  uint8_t *udp_data, *src_mac, *ether_frame;
+  uint8_t *src_mac, *ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in *ipv4;
   struct sockaddr_ll device;
@@ -72,7 +72,6 @@ main (void) {
 
   // Allocate memory for various arrays.
   src_mac = allocate_ustrmem (6);
-  udp_data = allocate_ustrmem (IP_MAXPACKET);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (HOSTNAME_LEN);
@@ -159,10 +158,7 @@ main (void) {
   device.sll_halen = 6;
 
   // UDP data
-  udp_data[0] = (uint8_t) 'T';
-  udp_data[1] = (uint8_t) 'e';
-  udp_data[2] = (uint8_t) 's';
-  udp_data[3] = (uint8_t) 't';
+  uint8_t udp_data[4] = {'T', 'e', 's', 't'};
   udp_datalen = 4;
 
   // IPv4 header
@@ -295,7 +291,6 @@ main (void) {
 
   // Free allocated memory.
   free (src_mac);
-  free (udp_data);
   free (ether_frame);
   free (interface);
   free (target);

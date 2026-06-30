@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netinet/icmp6.h>    // struct nd_router_advert, which contains icmp6_hdr, ND_ROUTER_ADVERT
@@ -33,7 +33,7 @@
 #include <sys/socket.h>       // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define SLLA_OPTLEN 8         // Source Link-Layer Address option length.

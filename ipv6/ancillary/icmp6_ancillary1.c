@@ -23,7 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // memset(), and memcpy()
+#include <string.h>           // memset(), memcpy()
 #include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <sys/socket.h>       // struct msghdr
@@ -33,7 +33,7 @@
 #include <netdb.h>            // struct addrinfo
 #include <net/if.h>           // struct ifreq
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
