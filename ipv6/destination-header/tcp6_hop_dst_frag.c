@@ -433,7 +433,7 @@ main (void) {
      fprintf (stderr, "Too many fragments.\n");
        exit (EXIT_FAILURE);
     }
-    offset[i] = (len[i-1] / 8) + offset[i-1];
+    offset[i] = (len[i - 1] / 8) + offset[i - 1];
   }
   nframes = i;
   fprintf (stdout, "Total number of frames to send: %d\n", nframes);

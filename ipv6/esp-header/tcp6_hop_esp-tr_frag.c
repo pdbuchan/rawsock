@@ -55,8 +55,8 @@ struct _hop_hdr {
 // Define a struct for head of ESP header, excluding payload and authentication data.
 typedef struct _esp_hdr esp_hdr;
 struct _esp_hdr {
-  u_int32_t spi;
-  u_int32_t seq;
+  uint32_t spi;
+  uint32_t seq;
 };
 
 // Define a struct for tail of ESP header, excluding payload and authentication data.
@@ -257,7 +257,7 @@ main (void) {
   esphdr.seq = htonl (51413);  // Sequence number
 
   // Authentication data (integrity check value (ICV))
-  auth_data[0] = 34;  // Made-up numbers used here. You need to compute as per Section 3 of RFC 2402.
+  auth_data[0] = 34;  // Made-up numbers used here. You need to compute as per Section 3 of RFC 2406.
   auth_data[1] = 2;
   auth_data[2] = 0;
   auth_data[3] = 16;
@@ -274,7 +274,7 @@ main (void) {
   auth_len = 12;
 
   // Print some information about authentication data.
-  fprintf (stdout, "Length of authentication data (integrity check value (ICV): %d\n", auth_len);
+  fprintf (stdout, "Length of authentication data (integrity check value (ICV)): %d\n", auth_len);
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
@@ -333,8 +333,9 @@ main (void) {
   // See Section 2.4 of RFC 2406. Padding values added to esp_payload later.
   esp_paylen = TCP_HDRLEN + tcp_datalen;
   esp_padlen = 0;
-  while (((esp_paylen + ESP_TAILLEN)%4) != 0) {
-    esp_paylen += 2;
+  while (((esp_paylen + ESP_TAILLEN) % 4) != 0) {
+    esp_paylen++;
+    esp_padlen++;
   }
 
   // Allocate memory for encapsulating security payload (ESP) payload data.
@@ -385,7 +386,7 @@ main (void) {
      fprintf (stderr, "Too many fragments.\n");
        exit (EXIT_FAILURE);
     }
-    offset[i] = (len[i-1] / 8) + offset[i-1];
+    offset[i] = (len[i - 1] / 8) + offset[i - 1];
   }
   nframes = i;
   fprintf (stdout, "Total number of frames to send: %d\n", nframes);
@@ -490,9 +491,11 @@ main (void) {
   // Build ESP payload (TCP header, TCP data, padding).
   memcpy (esp_payload, &tcphdr, TCP_HDRLEN);  // TCP header
   memcpy (esp_payload + TCP_HDRLEN, tcp_data, tcp_datalen);  // TCP data
-  // Add the default padding. See Section 2.4 of RFC 2406.
+
+  // Add ESP padding so that the Pad Length and Next Header fields end on a 4-byte boundary.
+  // See Section 2.4 of RFC 2406.
   for (i = 0; i < esp_padlen; i++) {
-    esp_payload[esp_paylen - esp_padlen + i] = (uint8_t) (i + 1u);
+    esp_payload[TCP_HDRLEN + tcp_datalen + i] = (uint8_t) (i + 1);
   }
 
   // ESP trailer.
