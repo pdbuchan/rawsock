@@ -31,7 +31,7 @@
 #include <arpa/inet.h>        // inet_ntop()
 #include <netdb.h>            // struct addrinfo
 #include <sys/ioctl.h>        // macro ioctl is defined
-#include <bits/socket.h>      // structs msghdr and cmsghdr
+#include <sys/socket.h>       // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
 
 #include <errno.h>            // errno, perror()
