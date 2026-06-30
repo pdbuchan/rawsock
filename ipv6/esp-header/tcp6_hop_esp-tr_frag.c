@@ -46,25 +46,22 @@
 #include <errno.h>            // errno
 
 // Define a struct for hop-by-hop header, excluding options.
-typedef struct _hop_hdr hop_hdr;
-struct _hop_hdr {
+typedef struct {
   uint8_t nxt_hdr;
   uint8_t hdr_len;
-};
+} HOP_HDR;
 
 // Define a struct for head of ESP header, excluding payload and authentication data.
-typedef struct _esp_hdr esp_hdr;
-struct _esp_hdr {
+typedef struct {
   uint32_t spi;
   uint32_t seq;
-};
+} ESP_HDR;
 
 // Define a struct for tail of ESP header, excluding payload and authentication data.
-typedef struct _esp_tail esp_tail;
-struct _esp_tail {
+typedef struct {
   uint8_t pad_len;
   uint8_t nxt_hdr;
-};
+} ESP_TAIL;
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
@@ -94,9 +91,9 @@ main (void) {
   int i, j, n, indx, status, frame_length, sd;
   int hoplen, mtu, frag_flags[2] = {0}, tcp_flags[8] = {0}, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS], esp_padlen;
   ssize_t bytes;
-  hop_hdr hophdr;
-  esp_hdr esphdr;
-  esp_tail esptail;
+  HOP_HDR hophdr;
+  ESP_HDR esphdr;
+  ESP_TAIL esptail;
   int hbh_optpadlen;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip6_hdr iphdr;
@@ -110,6 +107,13 @@ main (void) {
   struct sockaddr_ll device;
   struct ifreq ifr;
   FILE *fi;
+
+  memset (&iphdr, 0, sizeof (iphdr));
+  memset (&tcphdr, 0, sizeof (tcphdr));
+  memset (&fraghdr, 0, sizeof (fraghdr));
+  memset (&hophdr, 0, sizeof (hophdr));
+  memset (&esphdr, 0, sizeof (esphdr));
+  memset (&esp_tail, 0, sizeof (esp_tail));
 
   int hbh_nopt;  // Number of hop-by-hop options
   int hbh_opt_totlen;  // Total length of hop-by-hop options
@@ -132,7 +136,7 @@ main (void) {
   hbh_y = allocate_intmem (MAX_HBHOPTIONS);  // Hop-by-hop option alignment requirement y (of xN + y): hbh_y[option #] = int
   auth_data = allocate_ustrmem (0xff * 0xffff);  // auth_data = uint8_t *
   src_mac = allocate_ustrmem (6);
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
+  ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
@@ -143,10 +147,10 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send packet through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
-  if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
+  if ((sd = socket (AF_INET6, SOCK_DGRAM, 0)) < 0) {
     status = errno;
     fprintf (stderr, "socket() failed to get socket descriptor for using ioctl().\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
@@ -189,10 +193,10 @@ main (void) {
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: you need to fill this out
-  snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Number of hop-by-hop extension header options.
   hbh_nopt = 1;
@@ -536,7 +540,7 @@ main (void) {
   for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
-    memset (ether_frame, 0, IP_MAXPACKET);
+    memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
 
     // Index of ethernet frame.
     c = 0;

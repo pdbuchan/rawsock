@@ -84,13 +84,13 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send datagram through.
-  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "enp7s0");
 
   // Source IPv4 address (the advertising router) (32 bits): you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.3");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.3");
 
   // Destination IPv4 address ("all devices" multicast address) (32 bits)
-  snprintf (dst_ip, INET_ADDRSTRLEN, "%s", "224.0.0.1");
+  snprintf (dst_ip, INET_ADDRSTRLEN, "224.0.0.1");
 
   // Number of IPv4 addresses associated with this router that are included in this advertisement (8 bits)
   icmphdr.num_addrs = 1;  // You choose how many addresses will be advertised.

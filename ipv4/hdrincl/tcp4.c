@@ -77,13 +77,13 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send datagram through.
-  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "enp7s0");
 
   // Source IPv4 address: you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

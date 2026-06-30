@@ -86,7 +86,7 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send packet through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -142,10 +142,10 @@ main (void) {
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

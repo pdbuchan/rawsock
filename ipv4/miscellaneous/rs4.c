@@ -78,15 +78,15 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send datagram through.
-  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "enp7s0");
 
   // Source IPv4 address: you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Destination IPv4 address ("all routers" router solicitation multicast address)
   // If local network does not support multicast, use broadcast address 255.255.255.255 instead.
-  snprintf (dst_ip, INET_ADDRSTRLEN, "%s", "224.0.0.2");
-//  snprintf (dst_ip, INET_ADDRSTRLEN, "%s", "255.255.255.255");
+  snprintf (dst_ip, INET_ADDRSTRLEN, "224.0.0.2");
+//  snprintf (dst_ip, INET_ADDRSTRLEN, "255.255.255.255");
 
   // IPv4 header
 

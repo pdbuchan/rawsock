@@ -87,7 +87,7 @@ main (void) {
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
 
   // Interface to send packet through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -117,7 +117,7 @@ main (void) {
   memset (dst_mac, 0xff, 6);
 
   // Source IPv4 address: you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Destination hostname or IPv4 address (must be a link-local node): you need to fill this out
   snprintf (target, HOSTNAME_LEN, "192.168.0.63");

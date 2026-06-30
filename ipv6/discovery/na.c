@@ -70,7 +70,7 @@ main (void) {
   source = allocate_strmem (INET6_ADDRSTRLEN);
 
   // Interface to send datagram through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Source (node sending advertisement) IPv6 link-local address: You need to fill this out.
   snprintf (source, INET6_ADDRSTRLEN, "fe80::");
@@ -80,7 +80,7 @@ main (void) {
   // solicitation came from the unspecified address (::), use the
   // 2) IPv6 "all nodes" link-local multicast address (ff02::1).
   // You need to fill this out.
-  snprintf (target, INET6_ADDRSTRLEN, "%s", "ff02::1");
+  snprintf (target, INET6_ADDRSTRLEN, "ff02::1");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

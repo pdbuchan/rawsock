@@ -82,21 +82,21 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Set TCP data.
-  snprintf (url, TEXT_STRINGLEN, "%s", "ipv6.google.com");
+  snprintf (url, TEXT_STRINGLEN, "ipv6.google.com");
   snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
   snprintf (filename, TEXT_STRINGLEN, "filename");  // File we want to get
   snprintf (tcp_data, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
   tcp_datalen = strnlen (tcp_data, IP_MAXPACKET);
 
   // Interface to send datagram through.
-  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "enp7s0");
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: you need to fill this out
-  snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
@@ -142,7 +142,7 @@ main (void) {
   // Next header (8 bits): 6 for TCP
   iphdr.ip6_nxt = IPPROTO_TCP;
 
-  // Hop limit (8 bits): default to maximum value
+  // Hop limit (8 bits): Default to maximum value.
   iphdr.ip6_hops = 255;
 
   // Source IPv6 address (128 bits)

@@ -67,7 +67,7 @@ main (void) {
   destination = allocate_strmem (INET6_ADDRSTRLEN);
 
   // Interface to receive datagram on.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Prepare msghdr for recvmsg().
   memset (&msghdr, 0, sizeof (msghdr));

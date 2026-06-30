@@ -78,17 +78,17 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send datagram through.
-  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "enp7s0");
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv4 address: you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Destination hostname or IPv4 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "www.google.com");
+  snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

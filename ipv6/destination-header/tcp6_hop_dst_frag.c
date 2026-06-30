@@ -47,18 +47,16 @@
 #include <errno.h>            // errno
 
 // Define a struct for hop-by-hop header, excluding options.
-typedef struct _hop_hdr hop_hdr;
-struct _hop_hdr {
+typedef struct {
   uint8_t nxt_hdr;
   uint8_t hdr_len;
-};
+} HOP_HDR;
 
 // Define a struct for destination header, excluding options.
-typedef struct _dst_hdr dst_hdr;
-struct _dst_hdr {
+typedef struct {
   uint8_t nxt_hdr;
   uint8_t hdr_len;
-};
+} DST_HDR;
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
@@ -89,14 +87,14 @@ main (void) {
   int i, j, n, indx, status, frame_length, sd;
   int hoplen, dstlen, mtu, frag_flags[2] = {0}, tcp_flags[8] = {0}, c, nframes, offset[MAX_FRAGS] = {0}, len[MAX_FRAGS] = {0};
   ssize_t bytes;
-  hop_hdr hophdr;
+  HOP_HDR hophdr;
   int hbh_nopt;  // Number of hop-by-hop options
   int hbh_opt_totlen;  // Total length of hop-by-hop options
   int *hbh_optlen;  // Hop-by-hop option length: hbh_optlen[option #] = int
   uint8_t **hbh_options;  // Hop-by-hop options data: hbh_options[option #] = uint8_t *
   int *hbh_x, *hbh_y;  // Alignment requirements for hop-by-hop options: hbh_x[option #] = int, hbh_y[option #] = int
   int hbh_optpadlen;
-  dst_hdr dsthdr;
+  DST_HDR dsthdr;
   int dst_nopt;  // Number of destination options
   int dst_opt_totlen;  // Total length of destination options
   int *dst_optlen;  // Destination option length: dst_optlen[option #] = int
@@ -138,7 +136,7 @@ main (void) {
   dst_x = allocate_intmem (MAX_DSTOPTIONS);  // Destination option alignment requirement x (of xN + y): dst_x[option #] = int
   dst_y = allocate_intmem (MAX_DSTOPTIONS);  // Destination option alignment requirement y (of xN + y): dst_y[option #] = int
   src_mac = allocate_ustrmem (6);
-  ether_frame = allocate_ustrmem (IP_MAXPACKET);
+  ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
@@ -149,7 +147,7 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send packet through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET6, SOCK_DGRAM, 0)) < 0) {
@@ -195,10 +193,10 @@ main (void) {
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: you need to fill this out
-  snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Number of hop-by-hop extension header options.
   hbh_nopt = 1;
@@ -609,7 +607,7 @@ main (void) {
   for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
-    memset (ether_frame, 0, IP_MAXPACKET);
+    memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
 
     // Index of ethernet frame.
     c = 0;

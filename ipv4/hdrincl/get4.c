@@ -80,17 +80,17 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Set TCP data.
-  snprintf (url, TEXT_STRINGLEN, "%s", "www.google.com");
+  snprintf (url, TEXT_STRINGLEN, "www.google.com");
   snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
   snprintf (filename, TEXT_STRINGLEN, "filename");  // File we want to get
   snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
   payloadlen = strnlen (payload, IP_MAXPACKET);
 
   // Interface to send datagram through.
-  snprintf (interface, IFNAMSIZ, "%s", "enp7s0");
+  snprintf (interface, IFNAMSIZ, "enp7s0");
 
   // Source IPv4 address: you need to fill this out
-  snprintf (src_ip, INET_ADDRSTRLEN, "%s", "192.168.0.9");
+  snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

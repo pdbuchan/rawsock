@@ -71,7 +71,7 @@ main (void) {
   interface = allocate_strmem (sizeof (ifr.ifr_name));
 
   // Interface to send datagram through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Copy interface name into ifreq structure for SO_BINDTODEVICE.
   memset (&ifr, 0, sizeof (ifr));
@@ -82,10 +82,10 @@ main (void) {
   }
 
   // Source IPv6 address: you need to fill this out
-  snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (source, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

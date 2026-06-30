@@ -46,21 +46,19 @@
 #include <errno.h>            // errno
 
 // Define a struct for hop-by-hop header, excluding options.
-typedef struct _hop_hdr hop_hdr;
-struct _hop_hdr {
+typedef struct {
   uint8_t nxt_hdr;
   uint8_t hdr_len;
-};
+} HOP_HDR;
 
 // Define a struct for authentication header, excluding authentication data.
-typedef struct _auth_hdr auth_hdr;
-struct _auth_hdr {
+typedef struct {
   uint8_t nxt_hdr;
   uint8_t pay_len;
   u_int16_t reserved;
   u_int32_t spi;
   u_int32_t seq;
-};
+} AUTH_HDR;
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
@@ -89,8 +87,8 @@ main (void) {
   int i, j, n, indx, status, frame_length, sd;
   int hoplen, mtu, frag_flags[2] = {0}, tcp_flags[8] = {0}, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
   ssize_t (bytes);
-  hop_hdr hophdr;
-  auth_hdr authhdr;
+  HOP_HDR hophdr;
+  AUTH_HDR authhdr;
   int hbh_optpadlen;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip6_hdr iphdr, newiphdr;
@@ -142,7 +140,7 @@ main (void) {
   srand ((unsigned) time (NULL));
 
   // Interface to send packet through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET6, SOCK_DGRAM, 0)) < 0) {
@@ -188,10 +186,10 @@ main (void) {
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: you need to fill this out
-  snprintf (src_ip, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Number of hop-by-hop extension header options.
   hbh_nopt = 1;
@@ -380,7 +378,7 @@ main (void) {
      fprintf (stderr, "Too many fragments.\n");
        exit (EXIT_FAILURE);
     }
-    offset[i] = (len[i-1] / 8) + offset[i-1];
+    offset[i] = (len[i - 1] / 8) + offset[i - 1];
   }
   nframes = i;
   fprintf (stdout, "Total number of frames to send: %d\n", nframes);
@@ -397,7 +395,7 @@ main (void) {
   // We'll change this later, otherwise TCP checksum will be wrong.
   iphdr.ip6_nxt = IPPROTO_TCP;
 
-  // Hop limit (8 bits): default to maximum value
+  // Hop limit (8 bits): Default to maximum value.
   iphdr.ip6_hops = 255;
 
   // Source IPv6 address (128 bits)
@@ -594,7 +592,7 @@ main (void) {
   for (i = 0; i < nframes; i++) {
 
     // Set ethernet frame contents to zero initially.
-    memset (ether_frame, 0, IP_MAXPACKET);
+    memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
 
     // Index of ethernet frame.
     c = 0;

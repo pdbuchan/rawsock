@@ -71,7 +71,7 @@ main (void) {
   interface = allocate_strmem (sizeof (ifr.ifr_name));
 
   // Interface to send datagram through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET6, SOCK_DGRAM, 0)) < 0) {
@@ -97,10 +97,10 @@ main (void) {
   fprintf (stdout, "Index for interface %s is %d\n", interface, ifr.ifr_ifindex);
 
   // Source IPv6 address: you need to fill this out
-  snprintf (source, INET6_ADDRSTRLEN, "%s", "2001:db8::214:51ff:fe2f:1556");
+  snprintf (source, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Destination hostname or IPv6 address: you need to fill this out
-  snprintf (target, HOSTNAME_LEN, "%s", "ipv6.google.com");
+  snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));

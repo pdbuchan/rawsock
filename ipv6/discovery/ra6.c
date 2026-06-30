@@ -71,7 +71,7 @@ main (void) {
   source = allocate_strmem (INET6_ADDRSTRLEN);
 
   // Interface to send datagram through.
-  snprintf (interface, sizeof (ifr.ifr_name), "%s", "enp7s0");
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Source (router sending advertisement) IPv6 link-local address: You need to fill this out.
   snprintf (source, INET6_ADDRSTRLEN, "fe80::");
