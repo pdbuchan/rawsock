@@ -268,6 +268,8 @@ main (void) {
     fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %zd bytes.\n", bytes, (ssize_t) sizeof (icmp_msg));
     exit (EXIT_FAILURE);
   }
+
+  // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.

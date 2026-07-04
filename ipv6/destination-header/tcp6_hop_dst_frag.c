@@ -84,7 +84,7 @@ int *allocate_intmem (int);
 int
 main (void) {
 
-  int i, j, n, indx, status, frame_length, sd;
+  int i, j, n, indx, status, tcp_datalen, frame_length, sd, fragbufferlen;
   int hoplen, dstlen, mtu, frag_flags[2] = {0}, tcp_flags[8] = {0}, c, nframes, offset[MAX_FRAGS] = {0}, len[MAX_FRAGS] = {0};
   ssize_t bytes;
   HOP_HDR hophdr;
@@ -105,7 +105,6 @@ main (void) {
   struct ip6_hdr iphdr;
   struct tcphdr tcphdr;
   struct ip6_frag fraghdr;
-  int tcp_datalen, fragbufferlen;
   uint8_t *tcp_data, *fragbuffer, *src_mac, *ether_frame;
   uint32_t seq;
   struct addrinfo hints, *res;
@@ -192,10 +191,10 @@ main (void) {
   // For off-link destinations, this is normally the next-hop router's MAC address.
   uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv6 address: you need to fill this out
+  // Source IPv6 address: You need to fill this out.
   snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
-  // Destination hostname or IPv6 address: you need to fill this out
+  // Destination hostname or IPv6 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Number of hop-by-hop extension header options.
@@ -700,7 +699,7 @@ main (void) {
     // Check for short send.
     if (bytes != frame_length) {
       fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-      exit(EXIT_FAILURE);
+      exit (EXIT_FAILURE);
     }
   }
 

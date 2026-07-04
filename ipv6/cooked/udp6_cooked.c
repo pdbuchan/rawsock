@@ -206,7 +206,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.
@@ -262,7 +262,7 @@ checksum (uint8_t *addr, int len) {
 uint16_t
 udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, int udp_datalen) {
 
-  int udp_segment_len, chksumlen = 0;
+  int udp_datagram_len, chksumlen = 0;
   uint8_t *buf, *ptr;
   uint16_t answer;
   uint32_t lvalue;
@@ -276,10 +276,10 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
     exit (EXIT_FAILURE);
   }
 
-  udp_segment_len = UDP_HDRLEN + udp_datalen;
+  udp_datagram_len = UDP_HDRLEN + udp_datalen;
 
   // Allocate memory for buffer.
-  buf = allocate_ustrmem (40 + udp_segment_len + 1);  // Add 1 for possible padding.
+  buf = allocate_ustrmem (40 + udp_datagram_len + 1);  // Add 1 for possible padding.
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy source IP address into buf (128 bits)
@@ -293,7 +293,7 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
   chksumlen += sizeof (iphdr.ip6_dst.s6_addr);
 
   // Copy UDP length into buf (32 bits)
-  lvalue = htonl (udp_segment_len);
+  lvalue = htonl (udp_datagram_len);
   memcpy (ptr, &lvalue, sizeof (lvalue));
   ptr += sizeof (lvalue);
   chksumlen += sizeof (lvalue);
@@ -337,8 +337,9 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
     chksumlen += udp_datalen;
   }
 
-  // Pad to the next 16-bit boundary
-  if (udp_datalen % 2) {
+  // Pad to the next 16-bit boundary. The padding byte is used only for
+  // checksum calculation and is not part of the UDP datagram length.
+  if ((udp_datagram_len % 2) != 0) {
     *ptr = 0;
     chksumlen++;
   }

@@ -629,7 +629,7 @@ main (void) {
     // Check for short send.
     if (bytes != frame_length) {
       fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-      exit(EXIT_FAILURE);
+      exit (EXIT_FAILURE);
     }
   }
 

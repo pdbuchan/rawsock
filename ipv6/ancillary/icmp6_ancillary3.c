@@ -113,7 +113,7 @@ main (void) {
   // Resolve source using getaddrinfo().
   if ((status = getaddrinfo (source, NULL, &hints, &res)) != 0) {
     fprintf (stderr, "getaddrinfo() failed for source.\nError message: %s\n", gai_strerror (status));
-    return (EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
   memset (&src, 0, sizeof (src));
   memcpy (&src, res->ai_addr, res->ai_addrlen);
@@ -123,7 +123,7 @@ main (void) {
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
-    return (EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
   memset (&dst, 0, sizeof (dst));
   memcpy (&dst, res->ai_addr, res->ai_addrlen);
@@ -216,6 +216,8 @@ main (void) {
     fprintf (stderr, "sendmsg() sent %zd bytes but expected to send %zd bytes.\n", bytes, (ssize_t) sizeof (icmp_msg));
     exit (EXIT_FAILURE);
   }
+
+  // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.
