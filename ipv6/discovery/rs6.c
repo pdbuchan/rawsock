@@ -37,6 +37,7 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
 #define SLLA_OPTLEN 8         // Source Link-Layer Address option length
 
 // Function prototypes
@@ -300,8 +301,8 @@ icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
     fprintf (stderr, "ERROR: icmp_len must not be negative in icmp6_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if (icmp_len < 4) {
-    fprintf (stderr, "ERROR: icmp_len is too small to hold ICMP header in icmp6_checksum().\n");
+  if (icmp_len < ICMP_HDRLEN) {
+    fprintf (stderr, "ERROR: icmp_len is too small to hold an ICMPv6 header in icmp6_checksum().\n");
     exit (EXIT_FAILURE);
   }
   if (icmp_msg == NULL) {

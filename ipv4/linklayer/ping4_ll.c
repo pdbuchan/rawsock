@@ -547,8 +547,8 @@ icmp4_checksum (uint8_t *icmp_msg, int icmp_len) {
   uint8_t *buf;
   uint16_t answer;
 
-  if (icmp_len < 4) {
-    fprintf (stderr, "ERROR: icmp_len must be at least 4 bytes in icmp4_checksum().\n");
+  if (icmp_len < ICMP_HDRLEN) {
+    fprintf (stderr, "ERROR: icmp_len is too small to hold an ICMP header in icmp4_checksum().\n");
     exit (EXIT_FAILURE);
   }
 

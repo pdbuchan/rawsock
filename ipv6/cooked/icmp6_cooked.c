@@ -164,13 +164,13 @@ main (void) {
   // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
   icmphdr.icmp6_code = 0;
 
-  // Identifier (16 bits): usually pid of sending process - pick a number
+  // Identifier (16 bits): Usually pid of sending process; pick a number.
   icmphdr.icmp6_id = htons (1000);
 
-  // Sequence Number (16 bits): starts at 0
+  // Sequence Number (16 bits): Starts at 0.
   icmphdr.icmp6_seq = htons (0);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   icmphdr.icmp6_cksum = 0;
 
   // Fill out IPv6 datagram.
@@ -193,7 +193,7 @@ main (void) {
   memcpy (datagram + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
   fprintf (stdout, "Checksum: 0x%x\n", ntohs (icmphdr.icmp6_cksum));
 
-  // Open raw socket descriptor.
+  // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IPV6))) < 0) {
     status = errno;
     fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
@@ -213,6 +213,7 @@ main (void) {
     exit(EXIT_FAILURE);
   }
 
+  // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.
@@ -273,8 +274,8 @@ icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
     fprintf (stderr, "ERROR: icmp_len must not be negative in icmp6_checksum().\n");
     exit (EXIT_FAILURE);
   }
-  if (icmp_len < 4) {
-    fprintf (stderr, "ERROR: icmp_len is too small to hold ICMP header in icmp6_checksum().\n");
+  if (icmp_len < ICMP_HDRLEN) {
+    fprintf (stderr, "ERROR: icmp_len is too small to hold an ICMPv6 header in icmp6_checksum().\n");
     exit (EXIT_FAILURE);
   }
   if (icmp_msg == NULL) {
