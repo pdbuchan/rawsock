@@ -144,7 +144,7 @@ main (void) {
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
   hints.ai_family = AF_INET6;
-  hints.ai_socktype = 0;  // Address resolution only; any socket type.
+  hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().

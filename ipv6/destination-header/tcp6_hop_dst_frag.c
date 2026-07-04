@@ -327,7 +327,7 @@ main (void) {
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (struct addrinfo));
   hints.ai_family = AF_INET6;
-  hints.ai_socktype = 0;  // Address resolution only; any socket type.
+  hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().
@@ -485,7 +485,7 @@ main (void) {
   // Acknowledgement number (32 bits): 0 in an initial SYN.
   tcphdr.th_ack = htonl (0);
 
-  // Reserved (4 bits): should be 0
+  // Reserved (4 bits): Should be 0.
   tcphdr.th_x2 = 0;
 
   // Data offset (4 bits): size of TCP header in 32-bit words
