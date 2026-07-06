@@ -14,7 +14,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv6 TCP packet via raw socket at the link layer (ethernet frame).
+// Send an IPv6 TCP packet via raw socket at the link layer (Ethernet frame).
 // with a large amount of TCP data requiring fragmentation. Include a hop-by-hop options
 // extension header with a router alert option.
 // Need to have destination MAC address.
@@ -49,6 +49,7 @@ typedef struct {
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP6_HDRLEN 40         // IPv6 header length
 #define HOP_HDRLEN 2          // Hop-by-hop header length, excluding options
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
@@ -84,7 +85,7 @@ main (void) {
   struct ip6_hdr iphdr;
   struct tcphdr tcphdr;
   struct ip6_frag fraghdr;
-  uint8_t *tcp_data, *fragbuffer, *src_mac, *ether_frame;
+  uint8_t *tcp_data, *fragbuffer, src_mac[MAC_LEN], *ether_frame;
   uint32_t seq;
   struct addrinfo hints, *res;
   struct sockaddr_in6 dst;
@@ -105,7 +106,6 @@ main (void) {
   }
   hbh_x = allocate_intmem (MAX_HBHOPTIONS);  // Hop-by-hop option alignment requirement x (of xN + y): hbh_x[option #] = int
   hbh_y = allocate_intmem (MAX_HBHOPTIONS);  // Hop-by-hop option alignment requirement y (of xN + y): hbh_y[option #] = int
-  src_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (HOSTNAME_LEN);
@@ -150,17 +150,17 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, sizeof (src_mac));
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (src_mac); i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < (int) sizeof (src_mac) - 1) ? ":" : "\n");
   }
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
   // Source IPv6 address: You need to fill this out.
   snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
@@ -227,7 +227,7 @@ main (void) {
   fprintf (stdout, "Total length of hop-by-hop alignment padding and end-padding: %d\n", hbh_optpadlen);
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -256,8 +256,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // Get TCP data.
   i = 0;
@@ -293,7 +293,7 @@ main (void) {
     hoplen = 0;
   }
 
-  // Determine how many ethernet frames we'll need.
+  // Determine how many Ethernet frames we'll need.
   // Hop-by-hop header and its options are part of unfragmentable portion of packet.
   memset (len, 0, MAX_FRAGS * sizeof (int));
   memset (offset, 0, MAX_FRAGS * sizeof (int));
@@ -422,7 +422,7 @@ main (void) {
   // Urgent pointer (16 bits): 0 (only valid if URG flag is set)
   tcphdr.th_urp = htons (0);
 
-  // TCP checksum (16 bits)
+  // TCP checksum (16 bits): Set to 0 for checksum calculation.
   tcphdr.th_sum = 0;
   tcphdr.th_sum = tcp6_checksum (iphdr, tcphdr, NULL, 0, tcp_data, tcp_datalen);
 
@@ -461,25 +461,25 @@ main (void) {
   // Loop through fragments.
   for (i = 0; i < nframes; i++) {
 
-    // Set ethernet frame contents to zero initially.
+    // Set Ethernet frame contents to zero initially.
     memset (ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
 
-    // Index of ethernet frame.
+    // Index of Ethernet frame.
     c = 0;
 
-    // Fill out ethernet frame header.
+    // Fill out Ethernet frame header.
 
-    // Copy destination and source MAC addresses to ethernet frame.
-    memcpy (ether_frame, dst_mac, 6);
-    memcpy (ether_frame + 6, src_mac, 6);
+    // Copy destination and source MAC addresses to Ethernet frame.
+    memcpy (ether_frame, dst_mac, sizeof (dst_mac));
+    memcpy (ether_frame + sizeof (dst_mac), src_mac, sizeof (src_mac));
 
-    // Next is ethernet type code (ETH_P_IPV6 for IPv6).
+    // EtherType (16 bits): ETH_P_IPV6
     // http://www.iana.org/assignments/ethernet-numbers
     ether_frame[12] = ETH_P_IPV6 / 256;
     ether_frame[13] = ETH_P_IPV6 % 256;
     c += ETH_HDRLEN;
 
-    // Next is ethernet frame data
+    // Next is Ethernet frame data
 
     // Payload length (16 bits): See 3 of RFC 2460.
     // Set to zero if hop-by-hop extension header includes a jumbogram.
@@ -489,7 +489,7 @@ main (void) {
       iphdr.ip6_plen = htons (hoplen + FRG_HDRLEN + len[i]);
     }
 
-    // Copy IPv6 header to ethernet frame.
+    // Copy IPv6 header to Ethernet frame.
     memcpy (ether_frame + c, &iphdr, IP6_HDRLEN);
     c += IP6_HDRLEN;
 
@@ -497,17 +497,17 @@ main (void) {
     indx = 0;  // Index is zero at start of hop-by-hop header.
     if (hbh_nopt > 0) {
 
-      // Copy hop-by-hop extension header (without options) to ethernet frame.
+      // Copy hop-by-hop Extension header (without options) to ethernet frame.
       memcpy (ether_frame + c, &hophdr, HOP_HDRLEN);
       c += HOP_HDRLEN;
       indx += HOP_HDRLEN;
 
-      // Copy hop-by-hop extension header options to ethernet frame.
+      // Copy hop-by-hop extension header options to Ethernet frame.
       for (j = 0; j < hbh_nopt; j++) {
         // Pad as needed to achieve alignment requirements for option j (Section 4.2 of RFC 2460).
         option_pad (&indx, ether_frame, &c, hbh_x[j], hbh_y[j]);
 
-        // Copy hop-by-hop option to ethernet frame.
+        // Copy hop-by-hop option to Ethernet frame.
         memcpy (ether_frame + c, hbh_options[j], hbh_optlen[j]);
         c += hbh_optlen[j];
         indx += hbh_optlen[j];
@@ -517,7 +517,7 @@ main (void) {
       option_pad (&indx, ether_frame, &c, 8, 0);
     }
 
-    // Fill out and copy fragmentation extension header, if necessary, to ethernet frame.
+    // Fill out and copy fragmentation extension header, if necessary, to Ethernet frame.
     if (nframes > 1) {
       fraghdr.ip6f_nxt = IPPROTO_TCP;  // Upper layer protocol
       fraghdr.ip6f_reserved = 0;  // Reserved
@@ -533,14 +533,14 @@ main (void) {
       c += FRG_HDRLEN;
     }
 
-    // Copy fragmentable portion of packet to ethernet frame.
+    // Copy fragmentable portion of packet to Ethernet frame.
     memcpy (ether_frame + c, fragbuffer + (offset[i] * 8), len[i]);
     c += len[i];
 
     // Ethernet frame length
     frame_length = c;
 
-    // Send ethernet frame to socket.
+    // Send Ethernet frame to socket.
     fprintf (stdout, "Sending fragment: %d\n", i);
     bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
     if (bytes == -1) {
@@ -559,7 +559,6 @@ main (void) {
   close (sd);
 
   // Free allocated memory.
-  free (src_mac);
   free (ether_frame);
   free (interface);
   free (target);

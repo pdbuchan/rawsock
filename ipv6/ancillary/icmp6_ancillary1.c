@@ -81,14 +81,14 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Source IPv6 address: you need to fill this out
+  // Source IPv6 address: You need to fill this out.
   snprintf (source, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
-  // Destination hostname or IPv6 address: you need to fill this out
+  // Destination hostname or IPv6 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -134,7 +134,7 @@ main (void) {
   icmphdr.icmp6_seq = htons (0);
 
   // ICMP data
-  uint8_t icmp_data[4] = {'T', 'e', 's', 't'};
+  uint8_t icmp_data[] = {'T', 'e', 's', 't'};
   icmp_datalen = sizeof (icmp_data);
 
   // Build ICMP message for ICMP checksum calculation.
@@ -255,7 +255,7 @@ checksum (uint8_t *addr, int len) {
   return (htons (answer));
 }
 
-// Build IPv6 ICMP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
+// Build ICMPv6 pseudo-header and call checksum function (Section 8.1 of RFC 2460).
 uint16_t
 icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
 

@@ -86,7 +86,7 @@ main (void) {
   // Interface to send datagram through.
   snprintf (interface, IFNAMSIZ, "enp7s0");
 
-  // Source IPv4 address (the advertising router) (32 bits): you need to fill this out
+  // Source IPv4 address (the advertising router) (32 bits): You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.3");
 
   // Destination IPv4 address ("all devices" multicast address) (32 bits)
@@ -192,7 +192,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
 
   // ICMP header (Router Advertisement)
@@ -200,7 +200,7 @@ main (void) {
   // Message Type (8 bits): router advertisement
   icmphdr.type = ICMP_ROUTERADVERT;
 
-  // Message Code (8 bits): see RFC 1256
+  // Message Code (8 bits): See RFC 1256.
   icmphdr.code = 0;
 
   // ICMP data
@@ -238,7 +238,7 @@ main (void) {
   icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, icmp_msglen);
   memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
-  // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
+  // The kernel is going to prepare layer 2 information (Ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it
   // to decide where to send the raw datagram. We fill in a struct in_addr with
   // the desired destination IP address, and pass this structure to the sendto() function.
@@ -278,7 +278,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

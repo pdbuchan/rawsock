@@ -15,6 +15,7 @@
 */
 
 // Send an IPv4 HTTP GET datagram via raw TCP socket.
+// Demonstration packet only; a real HTTP GET requires an established TCP connection.
 // Stack fills out layer 2 (data link) information (MAC addresses) for us.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
@@ -39,7 +40,9 @@
 // Define some constants.
 #define IP4_HDRLEN 20         // IPv4 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
+#define PATH_LEN 255          // Maximum length of directory path
+#define FILENAME_LEN 255      // Maximum length of filename
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -56,8 +59,8 @@ main (void) {
   char *interface, *src_ip, *dst_ip;
   struct ip iphdr;
   struct tcphdr tcphdr;
-  char *payload, *url, *directory, *filename;
-  int payloadlen;
+  char *tcp_data, *url, *directory, *filename;
+  int tcp_datalen;
   uint8_t *datagram;
   uint32_t seq;
   struct addrinfo hints, *res;
@@ -71,29 +74,29 @@ main (void) {
   interface = allocate_strmem (IFNAMSIZ);
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
-  payload = allocate_strmem (IP_MAXPACKET);
-  url = allocate_strmem (TEXT_STRINGLEN);
-  directory = allocate_strmem (TEXT_STRINGLEN);
-  filename = allocate_strmem (TEXT_STRINGLEN);
+  tcp_data = allocate_strmem (IP_MAXPACKET);
+  url = allocate_strmem (HOSTNAME_LEN);
+  directory = allocate_strmem (PATH_LEN);
+  filename = allocate_strmem (FILENAME_LEN);
 
   // Random number seed
   srand ((unsigned) time (NULL));
 
   // Set TCP data.
-  snprintf (url, TEXT_STRINGLEN, "www.google.com");
-  snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
-  snprintf (filename, TEXT_STRINGLEN, "filename");  // File we want to get
-  snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
-  payloadlen = strnlen (payload, IP_MAXPACKET);
+  snprintf (url, HOSTNAME_LEN, "www.google.com");
+  snprintf (directory, PATH_LEN, "/some_directory_path/");
+  snprintf (filename, FILENAME_LEN, "filename");  // File we want to get
+  snprintf (tcp_data, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
+  tcp_datalen = strnlen (tcp_data, IP_MAXPACKET);
 
   // Interface to send datagram through.
   snprintf (interface, IFNAMSIZ, "enp7s0");
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -124,7 +127,7 @@ main (void) {
   iphdr.ip_tos = 0;
 
   // Total length of datagram (16 bits): IP header + TCP header + TCP data
-  iphdr.ip_len = htons (IP4_HDRLEN + TCP_HDRLEN + payloadlen);
+  iphdr.ip_len = htons (IP4_HDRLEN + TCP_HDRLEN + tcp_datalen);
 
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
@@ -174,7 +177,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -238,7 +241,7 @@ main (void) {
 
   // TCP checksum (16 bits)
   tcphdr.th_sum = 0;
-  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, (uint8_t *) payload, payloadlen);
+  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, (uint8_t *) tcp_data, tcp_datalen);
 
   // Prepare IPv4 datagram.
 
@@ -249,9 +252,9 @@ main (void) {
   memcpy ((datagram + IP4_HDRLEN), &tcphdr, TCP_HDRLEN);
 
   // Last part is upper layer protocol data.
-  memcpy ((datagram + IP4_HDRLEN + TCP_HDRLEN), payload, payloadlen);
+  memcpy ((datagram + IP4_HDRLEN + TCP_HDRLEN), tcp_data, tcp_datalen);
 
-  // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
+  // The kernel is going to prepare layer 2 information (Ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it
   // to decide where to send the raw datagram. We fill in a struct in_addr with
   // the desired destination IP address, and pass this structure to the sendto() function.
@@ -281,7 +284,7 @@ main (void) {
   }
 
   // Send datagram to socket.
-  datagram_length = IP4_HDRLEN + TCP_HDRLEN + payloadlen;
+  datagram_length = IP4_HDRLEN + TCP_HDRLEN + tcp_datalen;
   bytes = sendto (sd, datagram, datagram_length, 0, (struct sockaddr *) &sin, sizeof (struct sockaddr));
   if (bytes == -1) {
     status = errno;
@@ -291,7 +294,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.
@@ -302,7 +305,7 @@ main (void) {
   free (interface);
   free (src_ip);
   free (dst_ip);
-  free (payload);
+  free (tcp_data);
   free (url);
   free (directory);
   free (filename);

@@ -40,6 +40,7 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20         // IPv4 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
 #define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
@@ -82,16 +83,16 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -120,8 +121,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // IPv4 header
 
@@ -185,7 +186,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -280,7 +281,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

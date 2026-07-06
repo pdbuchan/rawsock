@@ -80,7 +80,7 @@ main (void) {
   // Interface to send datagram through.
   snprintf (interface, IFNAMSIZ, "enp7s0");
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Destination IPv4 address ("all routers" router solicitation multicast address)
@@ -150,7 +150,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -179,7 +179,7 @@ main (void) {
   icmphdr.checksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN);
   memcpy ((datagram + IP4_HDRLEN), &icmphdr, ICMP_HDRLEN);
 
-  // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
+  // The kernel is going to prepare layer 2 information (Ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it
   // to decide where to send the raw datagram. We fill in a struct in_addr with
   // the desired destination IP address, and pass this structure to the sendto() function.
@@ -228,7 +228,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

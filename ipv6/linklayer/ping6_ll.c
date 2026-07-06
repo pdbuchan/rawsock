@@ -14,159 +14,160 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv6 ICMP echo request packet via raw socket at the link layer (ethernet frame),
+// Send an ICMPv6 echo request packet via raw socket at the link layer (Ethernet frame),
 // and receive echo reply packet (i.e., ping). Includes some ICMP data.
 // Need to have destination MAC address.
 
+#define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
-#include <string.h>           // strcpy, memset(), and memcpy()
+#include <string.h>           // memset(), memcpy(), memcmp()
+#include <stdint.h>           // uint8_t, uint16_t, uint32_t
 
 #include <netdb.h>            // struct addrinfo
-#include <sys/types.h>        // needed for socket(), uint8_t, uint16_t
-#include <sys/socket.h>       // needed for socket()
+#include <sys/socket.h>       // socket()
 #include <netinet/in.h>       // IPPROTO_ICMPV6, INET6_ADDRSTRLEN
 #include <netinet/ip.h>       // IP_MAXPACKET (which is 65535)
 #include <netinet/ip6.h>      // struct ip6_hdr
-#include <netinet/icmp6.h>    // struct icmp6_hdr and ICMP6_ECHO_REQUEST
-#include <arpa/inet.h>        // inet_pton() and inet_ntop()
+#include <netinet/icmp6.h>    // struct icmp6_hdr, ICMP6_ECHO_REQUEST
+#include <arpa/inet.h>        // inet_pton(), inet_ntop()
 #include <sys/ioctl.h>        // macro ioctl is defined
 #include <net/if.h>           // struct ifreq
-#include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
+#include <linux/if_ether.h>   // ETH_HLEN, ETH_P_IPV6
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
-#include <net/ethernet.h>
-#include <sys/time.h>         // gettimeofday()
+#include <poll.h>             // poll()
+#include <time.h>             // clock_gettime()
 
-#include <errno.h>            // errno, perror()
+#include <errno.h>            // errno
 
 // Define some constants.
-#define ETH_HDRLEN 14  // Ethernet header length
-#define IP6_HDRLEN 40  // IPv6 header length
-#define ICMP_HDRLEN 8  // ICMP header length for echo request, excludes data
-#define TEXT_STRINGLEN 80  // Maximum number of characters in a string
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
+#define IP6_HDRLEN 40         // IPv6 header length
+#define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
+#define TIMEOUT 2             // Time for receive socket to wait for a reply (s)
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
-uint16_t icmp6_checksum (struct ip6_hdr, struct icmp6_hdr, uint8_t *, int);
+uint16_t icmp6_checksum (struct ip6_hdr, uint8_t *, int);
 char *allocate_strmem (int);
 uint8_t *allocate_ustrmem (int);
 
 int
-main (int argc, char **argv) {
+main (void) {
 
-  int i, status, datalen, frame_length, sendsd, recvsd, bytes, timeout, trycount, trylim, done;
+  int i, n, status, icmp_datalen, sd, sendsd, recvsd, frame_length, done;
+  int ip_total_len, timeout_ms, trylim, trycount;
+  ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip, *rec_ip;
   struct ip6_hdr send_iphdr, *recv_iphdr;
   struct icmp6_hdr send_icmphdr, *recv_icmphdr;
-  uint8_t *data, *src_mac, *dst_mac, *send_ether_frame, *recv_ether_frame;
+  uint8_t src_mac[MAC_LEN] = {0}, *send_ether_frame, *recv_ether_frame;
   struct addrinfo hints, *res;
-  struct sockaddr_in6 *ipv6;
-  struct sockaddr_ll device;
+  struct sockaddr_in6 dst;
+  struct sockaddr_ll device, from;
   struct ifreq ifr;
-  struct sockaddr from;
   socklen_t fromlen;
-  struct timeval wait, t1, t2;
-  struct timezone tz;
-  double dt;
-  void *tmp;
+  struct timespec t1, t2;
+  struct pollfd pfd;
+  double elapsed, remaining;
+
+  memset (&send_iphdr, 0, sizeof (send_iphdr)); 
+  memset (&send_icmphdr, 0, sizeof (send_icmphdr));
 
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
-  dst_mac = allocate_ustrmem (6);
-  data = allocate_ustrmem (IP_MAXPACKET);
-  send_ether_frame = allocate_ustrmem (IP_MAXPACKET);
-  recv_ether_frame = allocate_ustrmem (IP_MAXPACKET);
+  send_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
+  recv_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
-  target = allocate_strmem (TEXT_STRINGLEN);
+  target = allocate_strmem (HOSTNAME_LEN);
   src_ip = allocate_strmem (INET6_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET6_ADDRSTRLEN);
   rec_ip = allocate_strmem (INET6_ADDRSTRLEN);
 
+  // Random number seed
+  srand ((unsigned) time (NULL));
+
   // Interface to send packet through.
-  strncpy (interface, "eno1", sizeof (ifr.ifr_name));
+  snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
   // Submit request for a socket descriptor to look up interface.
-  // We'll use it to send packets as well, so we leave it open.
-  if ((sendsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed to get socket descriptor for using ioctl() ");
+  if ((sd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get socket descriptor for using ioctl() and sending packets.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
   // Use ioctl() to look up interface name and get its MAC address.
   memset (&ifr, 0, sizeof (ifr));
-  if (snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface) >= (int) sizeof (ifr.ifr_name)) {
-    fprintf (stderr, "Interface name too long.\n");
+  n = snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
+  if ((n < 0) || (n >= (int) sizeof (ifr.ifr_name))) {
+    fprintf (stderr, "Invalid interface name: %s\n", interface);
     exit (EXIT_FAILURE);
   }
-  if (ioctl (sendsd, SIOCGIFHWADDR, &ifr) < 0) {
-    perror ("ioctl() failed to get source MAC address ");
-    return (EXIT_FAILURE);
+  if (ioctl (sd, SIOCGIFHWADDR, &ifr) < 0) {
+    fprintf (stderr, "ioctl(SIOCGIFHWADDR) failed to get source MAC address.\nError message: %s\n", strerror (errno));
+    close (sd);
+    exit (EXIT_FAILURE);
   }
+  close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6 * sizeof (uint8_t));
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, sizeof (src_mac));
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (src_mac); i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < (int) sizeof (src_mac) - 1) ? ":" : "\n");
   }
 
-  // Find interface index from interface name and store index in
-  // struct sockaddr_ll device, which will be used as an argument of sendto().
-  memset (&device, 0, sizeof (device));
-  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
-    perror ("if_nametoindex() failed to obtain interface index ");
-    exit (EXIT_FAILURE);
-  }
-  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
+  // Destination Ethernet MAC address: You need to fill these out.
+  // For off-link destinations, this is normally the next-hop router's MAC address.
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Set destination MAC address: you need to fill these out
-  dst_mac[0] = 0xff;
-  dst_mac[1] = 0xff;
-  dst_mac[2] = 0xff;
-  dst_mac[3] = 0xff;
-  dst_mac[4] = 0xff;
-  dst_mac[5] = 0xff;
+  // Source IPv6 address: You need to fill this out.
+  snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
-  // Source IPv6 address: you need to fill this out
-  strncpy (src_ip, "2001:db8::214:51ff:fe2f:1556", INET6_ADDRSTRLEN);
-
-  // Destination hostname or IPv6 address: you need to fill this out
-  strncpy (target, "ipv6.google.com", TEXT_STRINGLEN);
+  // Destination hostname or IPv6 address: You need to fill this out.
+  snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
-  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().
   if ((status = getaddrinfo (target, NULL, &hints, &res)) != 0) {
-    fprintf (stderr, "getaddrinfo() failed for target: %s\n", gai_strerror (status));
+    fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
-  ipv6 = (struct sockaddr_in6 *) res->ai_addr;
-  tmp = &(ipv6->sin6_addr);
-  if (inet_ntop (AF_INET6, tmp, dst_ip, INET6_ADDRSTRLEN) == NULL) {
+  memset (&dst, 0, sizeof (dst));
+  memcpy (&dst, res->ai_addr, res->ai_addrlen);
+  if (inet_ntop (AF_INET6, &dst.sin6_addr, dst_ip, INET6_ADDRSTRLEN) == NULL) {
     status = errno;
-    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s", strerror (status));
+    fprintf (stderr, "inet_ntop() failed for target.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
   freeaddrinfo (res);
 
-  // Fill out sockaddr_ll.
+  // Fill out device's sockaddr_ll struct.
+  memset (&device, 0, sizeof (device));
   device.sll_family = AF_PACKET;
-  memcpy (device.sll_addr, src_mac, 6 * sizeof (uint8_t));
-  device.sll_halen = 6;
+  device.sll_protocol = htons (ETH_P_IPV6);
+  if ((device.sll_ifindex = if_nametoindex (interface)) == 0) {
+    status = errno;
+    fprintf (stderr, "if_nametoindex(\"%s\") failed to obtain interface index.\nError message: %s\n", interface, strerror (status));
+    exit (EXIT_FAILURE);
+  }
+  fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // ICMP data
-  datalen = 4;
-  data[0] = 'T';
-  data[1] = 'e';
-  data[2] = 's';
-  data[3] = 't';
+  uint8_t icmp_data[] = {'T', 'e', 's', 't'};
+  icmp_datalen = sizeof (icmp_data);
 
   // IPv6 header
 
@@ -174,23 +175,31 @@ main (int argc, char **argv) {
   send_iphdr.ip6_flow = htonl ((6 << 28) | (0 << 20) | 0);
 
   // Payload length (16 bits): ICMP header + ICMP data
-  send_iphdr.ip6_plen = htons (ICMP_HDRLEN + datalen);
+  send_iphdr.ip6_plen = htons (ICMP_HDRLEN + icmp_datalen);
 
-  // Next header (8 bits): 58 for ICMP
+  // Next header (8 bits): ICMPv6
   send_iphdr.ip6_nxt = IPPROTO_ICMPV6;
 
-  // Hop limit (8 bits): default to maximum value
+  // Hop limit (8 bits): Default to maximum value.
   send_iphdr.ip6_hops = 255;
 
   // Source IPv6 address (128 bits)
   if ((status = inet_pton (AF_INET6, src_ip, &(send_iphdr.ip6_src))) != 1) {
-    fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
   // Destination IPv6 address (128 bits)
   if ((status = inet_pton (AF_INET6, dst_ip, &(send_iphdr.ip6_dst))) != 1) {
-    fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (status));
+    if (status == 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
+    } else if (status < 0) {
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
+    }
     exit (EXIT_FAILURE);
   }
 
@@ -199,47 +208,61 @@ main (int argc, char **argv) {
   // Message Type (8 bits): echo request
   send_icmphdr.icmp6_type = ICMP6_ECHO_REQUEST;
 
-  // Message Code (8 bits): echo request
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
   send_icmphdr.icmp6_code = 0;
 
-  // Identifier (16 bits): usually pid of sending process - pick a number
+  // Identifier (16 bits): Usually pid of sending process; Pick a number.
   send_icmphdr.icmp6_id = htons (1000);
 
-  // Sequence Number (16 bits): starts at 0
+  // Sequence Number (16 bits): Starts at 0.
   send_icmphdr.icmp6_seq = htons (0);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   send_icmphdr.icmp6_cksum = 0;
-  send_icmphdr.icmp6_cksum = icmp6_checksum (send_iphdr, send_icmphdr, data, datalen);
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + ICMP header + ICMP data)
-  frame_length = ETH_HDRLEN + IP6_HDRLEN + ICMP_HDRLEN + datalen;
+  // Ethernet frame length = Ethernet header (MAC + MAC + Ethernet type) + Ethernet data (IP header + ICMP header + ICMP data)
+  frame_length = ETH_HDRLEN + IP6_HDRLEN + ICMP_HDRLEN + icmp_datalen;
 
   // Destination and Source MAC addresses
-  memcpy (send_ether_frame, dst_mac, 6 * sizeof (uint8_t));
-  memcpy (send_ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
+  memcpy (send_ether_frame, dst_mac, sizeof (dst_mac));
+  memcpy (send_ether_frame + sizeof (dst_mac), src_mac, sizeof (src_mac));
 
-  // Next is ethernet type code (ETH_P_IPV6 for IPv6).
+  // EtherType (16 bits): ETH_P_IPV6
   // http://www.iana.org/assignments/ethernet-numbers
   send_ether_frame[12] = ETH_P_IPV6 / 256;
   send_ether_frame[13] = ETH_P_IPV6 % 256;
 
-  // Next is ethernet frame data (IPv6 header + ICMP header + ICMP data).
+  // Next is Ethernet frame data (IPv6 header + ICMP header + ICMP data).
 
   // IPv6 header
-  memcpy (send_ether_frame + ETH_HDRLEN, &send_iphdr, IP6_HDRLEN * sizeof (uint8_t));
+  memcpy (send_ether_frame + ETH_HDRLEN, &send_iphdr, IP6_HDRLEN);
 
   // ICMP header
-  memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, &send_icmphdr, ICMP_HDRLEN * sizeof (uint8_t));
+  memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, &send_icmphdr, ICMP_HDRLEN);
 
   // ICMP data
-  memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN + ICMP_HDRLEN, data, datalen * sizeof (uint8_t));
+  memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN + ICMP_HDRLEN, icmp_data, icmp_datalen);
+
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
+  // Already set to 0 above.
+  send_icmphdr.icmp6_cksum = icmp6_checksum (send_iphdr, send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, ICMP_HDRLEN + icmp_datalen);
+  memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, &send_icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to Ethernet frame.
+  fprintf (stdout, "Checksum: 0x%x\n", ntohs (send_icmphdr.icmp6_cksum));
+
+  // Submit request for a raw socket descriptor to send packets.
+  if ((sendsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get send socket descriptor.\nError message: %s\n", strerror (status));
+    exit (EXIT_FAILURE);
+  }
 
   // Submit request for a raw socket descriptor to receive packets.
-  if ((recvsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
-    perror ("socket() failed ");
+  // Use ETH_P_IPV6 in order to only look at IPv6 packets; could use ETH_P_ALL but likely slower on a busy network.
+  if ((recvsd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_IPV6))) < 0) {
+    status = errno;
+    fprintf (stderr, "socket() failed to get receive socket descriptor.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
@@ -247,81 +270,164 @@ main (int argc, char **argv) {
   trylim = 3;
   trycount = 0;
 
-  // Cast recv_iphdr as pointer to IPv6 header within received ethernet frame.
-  recv_iphdr = (struct ip6_hdr *) (recv_ether_frame + ETH_HDRLEN);
-
-  // Cast recv_icmphdr as pointer to ICMP header within received ethernet frame.
-  recv_icmphdr = (struct icmp6_hdr *) (recv_ether_frame + ETH_HDRLEN + IP6_HDRLEN);
-
   done = 0;
   for (;;) {
 
     // SEND
 
-    // Send ethernet frame to socket.
-    if ((bytes = sendto (sendsd, send_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
-      perror ("sendto() failed ");
+    // Set sequence number for this attempt and recompute ICMP checksum.
+    // This prevents a delayed reply from an earlier attempt from matching a later attempt.
+    send_icmphdr.icmp6_seq = htons (trycount);
+    send_icmphdr.icmp6_cksum = 0;
+    memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, &send_icmphdr, ICMP_HDRLEN);
+    send_icmphdr.icmp6_cksum = icmp6_checksum (send_iphdr, send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, ICMP_HDRLEN + icmp_datalen);
+    memcpy (send_ether_frame + ETH_HDRLEN + IP6_HDRLEN, &send_icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to Ethernet frame.
+
+    // Send Ethernet frame to socket.
+    bytes = sendto (sendsd, send_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
+    if (bytes == -1) {
+      status = errno;
+      fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
+      exit (EXIT_FAILURE);
+    }
+    // Check for short send.
+    if (bytes != frame_length) {
+      fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
       exit (EXIT_FAILURE);
     }
 
     // Start timer.
-    (void) gettimeofday (&t1, &tz);
+    (void) clock_gettime (CLOCK_MONOTONIC, &t1);
 
-    // Set time for the socket to timeout and give up waiting for a reply.
-    timeout = 2;
-    wait.tv_sec  = timeout;  
-    wait.tv_usec = 0;
-    setsockopt (recvsd, SOL_SOCKET, SO_RCVTIMEO, (char *) &wait, sizeof (struct timeval));
-
-    // Listen for incoming ethernet frame from socket recvsd.
-    // We expect an ICMP ethernet frame of the form:
-    //     MAC (6 bytes) + MAC (6 bytes) + ethernet type (2 bytes)
-    //     + ethernet data (IPv6 header + ICMP header)
-    // Keep at it for 'timeout' seconds, or until we get an ICMP reply.
+    // Listen for incoming Ethernet frame from socket recvsd.
+    // We expect an ICMPv6 Ethernet frame of the form:
+    //     MAC (6 bytes) + MAC (6 bytes) + Ethernet Type (2 bytes)
+    //     + Ethernet data (IPv6 header + ICMP header)
+    // Keep listening for up to TIMEOUT seconds, or until an ICMPv6 Echo Reply is received.
 
     // RECEIVE LOOP
     for (;;) {
 
-      memset (recv_ether_frame, 0, IP_MAXPACKET * sizeof (uint8_t));
+      memset (recv_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
       memset (&from, 0, sizeof (from));
       fromlen = sizeof (from);
-      if ((bytes = recvfrom (recvsd, recv_ether_frame, IP_MAXPACKET, 0, (struct sockaddr *) &from, &fromlen)) < 0) {
 
+      // Set up pollfd structure for poll().
+      memset (&pfd, 0, sizeof (pfd));
+      pfd.fd = recvsd;
+      pfd.events = POLLIN;
+
+      // Calculate elapsed and remaining times.
+      clock_gettime (CLOCK_MONOTONIC, &t2);
+      elapsed = (double) (t2.tv_sec - t1.tv_sec) + (double) (t2.tv_nsec - t1.tv_nsec) / 1000000000.0;
+      remaining = TIMEOUT - elapsed;
+
+      if (remaining <= 0.0) {
+        fprintf (stdout, "No reply within %d seconds.\n", TIMEOUT);
+        trycount++;
+        break;
+      }
+
+      timeout_ms = (int) (remaining * 1000.0);  // milliseconds
+      if (timeout_ms < 1) timeout_ms = 1;
+
+      // Wait for data to be available on our receive socket, or until we time-out.
+      status = poll (&pfd, 1, timeout_ms);
+      if (status < 0) {
         status = errno;
-
-        // Deal with error conditions first.
-        if (status == EAGAIN) {  // EAGAIN = 11
-          fprintf (stdout, "No reply within %d seconds.\n", timeout);
-          trycount++;
-          break;  // Break out of Receive loop.
-        } else if (status == EINTR) {  // EINTR = 4
-          continue;  // Something weird happened, but let's keep listening.
+        if (status == EINTR) {
+          continue;
         } else {
-          perror ("recvfrom() failed ");
+          fprintf (stderr, "poll() failed. Error message: %s\n", strerror (status));
           exit (EXIT_FAILURE);
         }
-      }  // End of error handling conditionals.
+      }
 
-      // Check for an IP ethernet frame, carrying ICMP echo reply. If not, ignore and keep listening.
-      if ((((recv_ether_frame[12] << 8) + recv_ether_frame[13]) == ETH_P_IPV6) &&
-         (recv_iphdr->ip6_nxt == IPPROTO_ICMPV6) && (recv_icmphdr->icmp6_type == ICMP6_ECHO_REPLY) && (recv_icmphdr->icmp6_code == 0)) {
+      // Receive socket timed-out.
+      if (status == 0) {
+        fprintf (stdout, "No reply within %d seconds.\n", TIMEOUT);
+        trycount++;
+        break;  // Break out of Receive loop.
+      }
+
+      // Check for socket error conditions reported by poll().
+      if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+        fprintf (stderr, "poll() reported socket error: revents = 0x%x.\n", pfd.revents);
+        exit (EXIT_FAILURE);
+      }
+
+      // If pfd has POLLIN set in revents, then recvsd (i.e., pfd.fd) is ready for reading.
+      if (pfd.revents & POLLIN) {
+
+        // Read available data from recvsd.
+        bytes = recvfrom (recvsd, recv_ether_frame, ETH_HDRLEN + IP_MAXPACKET, 0, (struct sockaddr *) &from, &fromlen);
+
+        // Deal with error conditions first.
+        if (bytes < 0) {
+          status = errno;
+          if ((status == EINTR) || (status == EAGAIN) || (status == EWOULDBLOCK)) {  // EINTR = 4
+            continue;  // System call interrupted by a signal before completion. Retry.
+          } else {
+            fprintf (stderr, "recvfrom() failed.\nError message: %s\n", strerror (status));
+            exit (EXIT_FAILURE);
+          }
+        }
+
+        // Ignore packets received on other interfaces.
+        if (from.sll_ifindex != device.sll_ifindex) continue;
+
+        // Check for malformed packet; insufficient bytes to parse Ethernet header.
+        if ((bytes >= 0) && (bytes < ETH_HDRLEN)) continue;
+
+      // poll() returned, but no readable data was available; keep listening.
+      } else {
+        continue;
+      }
+
+      if (bytes < (ETH_HDRLEN + IP6_HDRLEN)) continue;
+
+      if (((recv_ether_frame[12] << 8) + recv_ether_frame[13]) != ETH_P_IPV6) continue;
+
+      recv_iphdr = (struct ip6_hdr *) (recv_ether_frame + ETH_HDRLEN);
+
+      if ((recv_iphdr->ip6_vfc >> 4) != 6) continue;
+
+      ip_total_len = ntohs (recv_iphdr->ip6_plen);
+      if (ip_total_len < ICMP_HDRLEN) continue;
+      if (bytes < (ETH_HDRLEN + IP6_HDRLEN + ip_total_len)) continue;
+
+      if (recv_iphdr->ip6_nxt != IPPROTO_ICMPV6) continue;
+
+      recv_icmphdr = (struct icmp6_hdr *) (recv_ether_frame + ETH_HDRLEN + IP6_HDRLEN);
+
+
+      // Check for an IPv6 Ethernet frame, carrying ICMPv6 echo reply. If not, ignore and keep listening.
+      // Make sure it's an ICMPv6 ECHO REPLY with code 0, and match ID, Sequence #, source and destination addresses.
+      if ((recv_icmphdr->icmp6_type == ICMP6_ECHO_REPLY) &&
+          (recv_icmphdr->icmp6_code == 0) &&
+          (recv_icmphdr->icmp6_id == send_icmphdr.icmp6_id) &&
+          (recv_icmphdr->icmp6_seq == send_icmphdr.icmp6_seq) &&
+          (memcmp (&recv_iphdr->ip6_src, &send_iphdr.ip6_dst, sizeof (struct in6_addr)) == 0) &&
+          (memcmp (&recv_iphdr->ip6_dst, &send_iphdr.ip6_src, sizeof (struct in6_addr)) == 0)) {
 
         // Stop timer and calculate how long it took to get a reply.
-        (void) gettimeofday (&t2, &tz);
-        dt = (double) (t2.tv_sec - t1.tv_sec) * 1000.0 + (double) (t2.tv_usec - t1.tv_usec) / 1000.0;
+        (void) clock_gettime (CLOCK_MONOTONIC, &t2);
+        elapsed = (double) (t2.tv_sec - t1.tv_sec) + (double) (t2.tv_nsec - t1.tv_nsec) / 1000000000.0;
+        remaining = TIMEOUT - elapsed;
+        if (remaining < 0) remaining = 0;
 
-        // Extract source IP address from received ethernet frame.
+        // Extract source IP address from received Ethernet frame.
         if (inet_ntop (AF_INET6, &(recv_iphdr->ip6_src), rec_ip, INET6_ADDRSTRLEN) == NULL) {
           status = errno;
-          fprintf (stderr, "inet_ntop() failed.\nError message: %s", strerror (status));
+          fprintf (stderr, "inet_ntop() failed.\nError message: %s\n", strerror (status));
           exit (EXIT_FAILURE);
         }
 
         // Report source IPv6 address and time for reply.
-        fprintf (stdout, "%s  %g ms (%d bytes received)\n", rec_ip, dt, bytes);
+        fprintf (stdout, "%s  %g ms (%zd bytes received)\n", rec_ip, elapsed * 1000.0, bytes);
         done = 1;
         break;  // Break out of Receive loop.
-      }  // End if IP ethernet frame carrying ICMP_ECHOREPLY
+      }  // End if IPv6 Ethernet frame carrying ICMP6_ECHO_REPLY
     }  // End of Receive loop.
 
     // The 'done' flag was set because an echo reply was received; break out of send loop.
@@ -342,9 +448,6 @@ main (int argc, char **argv) {
   close (recvsd);
 
   // Free allocated memory.
-  free (src_mac);
-  free (dst_mac);
-  free (data);
   free (send_ether_frame);
   free (recv_ether_frame);
   free (interface);
@@ -378,100 +481,81 @@ checksum (uint8_t *addr, int len) {
     sum += ((uint16_t) addr[0] << 8);
   }
 
-  // Fold 32-bit sum into 16 bits; we lose information by doing this,
-  // increasing the chances of a collision.
+  // Fold the accumulated sum into 16 bits by repeatedly adding
+  // carries back into the low 16 bits (one's-complement arithmetic).
   // sum = (lower 16 bits) + (upper 16 bits shifted right 16 bits)
   while (sum >> 16) {
     sum = (sum & 0xffff) + (sum >> 16);
   }
 
-  // Checksum is one's compliment of sum. Return it in network byte order
+  // Checksum is one's-complement of sum. Return it in network byte order
   // so it can be copied directly into the packet header.
   answer = ~sum;
 
   return (htons (answer));
 }
 
-// Build IPv6 ICMP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
+// Build ICMPv6 pseudo-header and call checksum function (Section 8.1 of RFC 2460).
 uint16_t
-icmp6_checksum (struct ip6_hdr iphdr, struct icmp6_hdr icmp6hdr, uint8_t *payload, int payloadlen) {
+icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
 
-  char buf[IP_MAXPACKET];
-  char *ptr;
-  int chksumlen = 0;
-  int i;
+  uint8_t *buf, *ptr, cvalue = IPPROTO_ICMPV6;
+  uint16_t answer = 0;
+  uint32_t lvalue;
 
+  if (icmp_len < 0) {
+    fprintf (stderr, "ERROR: icmp_len must not be negative in icmp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if (icmp_len < ICMP_HDRLEN) {
+    fprintf (stderr, "ERROR: icmp_len is too small to hold an ICMPv6 header in icmp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+  if (icmp_msg == NULL) {
+    fprintf (stderr, "ERROR: icmp_msg is NULL in icmp6_checksum().\n");
+    exit (EXIT_FAILURE);
+  }
+
+  // Allocate memory for buffer.
+  buf = allocate_ustrmem (40 + icmp_len + 1);  // Add 1 for possible padding.
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy source IP address into buf (128 bits)
   memcpy (ptr, &iphdr.ip6_src.s6_addr, sizeof (iphdr.ip6_src.s6_addr));
-  ptr += sizeof (iphdr.ip6_src);
-  chksumlen += sizeof (iphdr.ip6_src);
+  ptr += sizeof (iphdr.ip6_src.s6_addr);
 
   // Copy destination IP address into buf (128 bits)
   memcpy (ptr, &iphdr.ip6_dst.s6_addr, sizeof (iphdr.ip6_dst.s6_addr));
   ptr += sizeof (iphdr.ip6_dst.s6_addr);
-  chksumlen += sizeof (iphdr.ip6_dst.s6_addr);
 
-  // Copy Upper Layer Packet length into buf (32 bits).
-  // Should not be greater than 65535 (i.e., 2 bytes).
-  *ptr = 0; ptr++;
-  *ptr = 0; ptr++;
-  *ptr = (ICMP_HDRLEN + payloadlen) / 256;
-  ptr++;
-  *ptr = (ICMP_HDRLEN + payloadlen) % 256;
-  ptr++;
-  chksumlen += 4;
+  // Copy Upper-Layer Packet Length into buf (32 bits).
+  lvalue = htonl (icmp_len);
+  memcpy (ptr, &lvalue, sizeof (lvalue));
+  ptr += sizeof (lvalue);
 
   // Copy zero field to buf (24 bits)
   *ptr = 0; ptr++;
   *ptr = 0; ptr++;
   *ptr = 0; ptr++;
-  chksumlen += 3;
 
   // Copy next header field to buf (8 bits)
-  memcpy (ptr, &iphdr.ip6_nxt, sizeof (iphdr.ip6_nxt));
-  ptr += sizeof (iphdr.ip6_nxt);
-  chksumlen += sizeof (iphdr.ip6_nxt);
+  memcpy (ptr, &cvalue, sizeof (cvalue));
+  ptr += sizeof (cvalue);
 
-  // Copy ICMPv6 type to buf (8 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_type, sizeof (icmp6hdr.icmp6_type));
-  ptr += sizeof (icmp6hdr.icmp6_type);
-  chksumlen += sizeof (icmp6hdr.icmp6_type);
+  // Copy ICMP header and ICMP data.
+  memcpy (ptr, icmp_msg, icmp_len);
 
-  // Copy ICMPv6 code to buf (8 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_code, sizeof (icmp6hdr.icmp6_code));
-  ptr += sizeof (icmp6hdr.icmp6_code);
-  chksumlen += sizeof (icmp6hdr.icmp6_code);
+  // ICMP checksum field is bytes 2 and 3 of the ICMP message.
+  // Set to zero for checksum calculation.
+  buf[40 + 2] = 0;
+  buf[40 + 3] = 0;
 
-  // Copy ICMPv6 ID to buf (16 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_id, sizeof (icmp6hdr.icmp6_id));
-  ptr += sizeof (icmp6hdr.icmp6_id);
-  chksumlen += sizeof (icmp6hdr.icmp6_id);
+  answer = checksum (buf, 40 + icmp_len);
 
-  // Copy ICMPv6 sequence number to buff (16 bits)
-  memcpy (ptr, &icmp6hdr.icmp6_seq, sizeof (icmp6hdr.icmp6_seq));
-  ptr += sizeof (icmp6hdr.icmp6_seq);
-  chksumlen += sizeof (icmp6hdr.icmp6_seq);
+  // Free allocated memory.
+  free (buf);
 
-  // Copy ICMPv6 checksum to buf (16 bits)
-  // Zero, since we don't know it yet.
-  *ptr = 0; ptr++;
-  *ptr = 0; ptr++;
-  chksumlen += 2;
-
-  // Copy ICMPv6 payload to buf
-  memcpy (ptr, payload, payloadlen * sizeof (uint8_t));
-  ptr += payloadlen;
-  chksumlen += payloadlen;
-
-  // Pad to the next 16-bit boundary
-  for (i = 0; i < (payloadlen % 2); i++, ptr++) {
-    *ptr = 0; ptr++;
-    chksumlen++;
-  }
-
-  return checksum ((uint8_t *) buf, chksumlen);
+  return (answer);
 }
 
 // Allocate memory for an array of chars.

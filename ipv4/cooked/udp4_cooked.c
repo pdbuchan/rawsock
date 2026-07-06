@@ -40,6 +40,7 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20         // IPv4 header length
 #define UDP_HDRLEN  8         // UDP header length, excludes data
 #define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
@@ -81,16 +82,16 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -119,8 +120,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // UDP data
   uint8_t udp_data[4] = {'T', 'e', 's', 't'};
@@ -188,16 +189,16 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
   // UDP header
 
-  // Source port number (16 bits): pick a number
+  // Source port number (16 bits): Pick a number.
   udphdr.source = htons (4950);
 
-  // Destination port number (16 bits): pick a number
+  // Destination port number (16 bits): Pick a number.
   udphdr.dest = htons (4950);
 
   // Length of UDP datagram (16 bits): UDP header + UDP data
@@ -238,7 +239,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

@@ -14,7 +14,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv4 ICMP packet via raw socket at the link layer (ethernet frame).
+// Send an IPv4 ICMP packet via raw socket at the link layer (Ethernet frame).
 // Need to have destination MAC address.
 // Values set for echo request packet, includes some ICMP data.
 
@@ -41,6 +41,7 @@
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20         // IPv4 header length
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
 #define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
@@ -59,7 +60,7 @@ main (void) {
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
   struct icmp icmphdr;
-  uint8_t *src_mac, *icmp_msg, *ether_frame;
+  uint8_t src_mac[MAC_LEN] = {0}, *icmp_msg, *ether_frame;
   struct addrinfo hints, *res;
   struct sockaddr_in dst;
   struct sockaddr_ll device;
@@ -69,7 +70,6 @@ main (void) {
   memset (&icmphdr, 0, sizeof (icmphdr));
 
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
   icmp_msg = allocate_ustrmem (IP_MAXPACKET);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
@@ -105,26 +105,26 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, sizeof (src_mac));
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (src_mac); i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < (int) sizeof (src_mac) - 1) ? ":" : "\n");
   }
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -153,11 +153,14 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // ICMP data
-  uint8_t icmpdata[4] = {'T', 'e', 's', 't'};
+  // Use "icmpdata" instead of "icmp_data" because <netinet/ip_icmp.h>
+  // defines icmp_data as a macro, which would conflict with a variable
+  // of the same name.
+  uint8_t icmpdata[] = {'T', 'e', 's', 't'};
   icmp_datalen = 4;
 
   // IPv4 header
@@ -222,7 +225,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -231,13 +234,13 @@ main (void) {
   // Message Type (8 bits): echo request
   icmphdr.icmp_type = ICMP_ECHO;
 
-  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; Set to 0.
   icmphdr.icmp_code = 0;
 
-  // Identifier (16 bits): usually pid of sending process - pick a number
+  // Identifier (16 bits): Usually pid of sending process; Pick a number.
   icmphdr.icmp_id = htons (1000);
 
-  // Sequence Number (16 bits): starts at 0
+  // Sequence Number (16 bits): Starts at 0.
   icmphdr.icmp_seq = htons (0);
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
@@ -253,21 +256,21 @@ main (void) {
   icmphdr.icmp_cksum = icmp4_checksum (icmp_msg, ICMP_HDRLEN + icmp_datalen);
   memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + ICMP header + ICMP data)
+  // Ethernet frame length = Ethernet header (MAC + MAC + Ethernet type) + Ethernet data (IP header + ICMP header + ICMP data)
   frame_length = ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN + icmp_datalen;
 
   // Destination and Source MAC addresses
-  memcpy (ether_frame, dst_mac, 6);
-  memcpy (ether_frame + 6, src_mac, 6);
+  memcpy (ether_frame, dst_mac, sizeof (dst_mac));
+  memcpy (ether_frame + sizeof (dst_mac), src_mac, sizeof (src_mac));
 
-  // Next is ethernet type code (ETH_P_IP for IPv4).
+  // EtherType (16 bits): ETH_P_IP
   // http://www.iana.org/assignments/ethernet-numbers
   ether_frame[12] = ETH_P_IP / 256;
   ether_frame[13] = ETH_P_IP % 256;
 
-  // Next is ethernet frame data (IPv4 header + ICMP header + ICMP data).
+  // Next is Ethernet frame data (IPv4 header + ICMP header + ICMP data).
 
   // IPv4 header
   memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
@@ -282,7 +285,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
+  // Send Ethernet frame to socket.
   bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
   if (bytes == -1) {
     status = errno;
@@ -292,14 +295,13 @@ main (void) {
   // Check for short send.
   if (bytes != frame_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.
-  free (src_mac);
   free (icmp_msg);
   free (ether_frame);
   free (interface);

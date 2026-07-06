@@ -41,6 +41,7 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP6_HDRLEN 40         // IPv6 header length
 #define UDP_HDRLEN  8         // UDP header length, excludes data
 #define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
@@ -82,12 +83,12 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv6 address: you need to fill this out
+  // Source IPv6 address: You need to fill this out.
   snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
-  // Destination hostname or IPv6 address: you need to fill this out
+  // Destination hostname or IPv6 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
@@ -120,8 +121,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // UDP data
   uint8_t udp_data[4] = {'T', 'e', 's', 't'};
@@ -163,16 +164,17 @@ main (void) {
 
   // UDP header
 
-  // Source port number (16 bits): pick a number
+  // Source port number (16 bits): Pick a number.
   udphdr.source = htons (4950);
 
-  // Destination port number (16 bits): pick a number
+  // Destination port number (16 bits): Pick a number.
   udphdr.dest = htons (4950);
 
   // Length of UDP datagram (16 bits): UDP header + UDP data
   udphdr.len = htons (UDP_HDRLEN + udp_datalen);
 
-  // UDP checksum (16 bits)
+  // UDP checksum (16 bits): Set to 0 for checksum calculation.
+  udphdr.check = 0;
   udphdr.check = udp6_checksum (iphdr, udphdr, udp_data, udp_datalen);
 
   // Fill out IP datagram.
@@ -193,7 +195,7 @@ main (void) {
   if ((sd = socket (PF_PACKET, SOCK_DGRAM, htons (ETH_P_IPV6))) < 0) {
     status = errno;
     fprintf (stderr, "socket() failed to get socket descriptor.\nError message: %s\n", strerror (status));
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Send datagram to socket.

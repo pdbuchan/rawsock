@@ -15,6 +15,7 @@
 */
 
 // Send a "cooked" IPv4 HTTP GET packet via raw socket.
+// Demonstration packet only; a real HTTP GET requires an established TCP connection.
 // Need to specify destination MAC address.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
@@ -39,9 +40,12 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20         // IPv4 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
+#define PATH_LEN 255          // Maximum length of directory path
+#define FILENAME_LEN 255      // Maximum length of filename
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -73,17 +77,17 @@ main (void) {
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
   tcp_data = allocate_strmem (IP_MAXPACKET);
-  url = allocate_strmem (TEXT_STRINGLEN);
-  directory = allocate_strmem (TEXT_STRINGLEN);
-  filename = allocate_strmem (TEXT_STRINGLEN);
+  url = allocate_strmem (HOSTNAME_LEN);
+  directory = allocate_strmem (PATH_LEN);
+  filename = allocate_strmem (FILENAME_LEN);
 
   // Random number seed
   srand ((unsigned) time (NULL));
 
   // Set TCP data.
-  snprintf (url, TEXT_STRINGLEN, "www.google.com");
-  snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
-  snprintf (filename, TEXT_STRINGLEN, "filename");  // File we want to get
+  snprintf (url, HOSTNAME_LEN, "www.google.com");
+  snprintf (directory, PATH_LEN, "/some_directory_path/");
+  snprintf (filename, FILENAME_LEN, "filename");  // File we want to get
   snprintf (tcp_data, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
   tcp_datalen = strnlen (tcp_data, IP_MAXPACKET);
 
@@ -92,13 +96,13 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -127,8 +131,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // IPv4 header
 
@@ -192,7 +196,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -289,7 +293,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

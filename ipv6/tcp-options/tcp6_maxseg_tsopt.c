@@ -293,7 +293,7 @@ main (int argc, char **argv) {
 
   // Fill out ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + TCP header + TCP options)
+  // Ethernet frame length = Ethernet header (MAC + MAC + Ethernet type) + Ethernet data (IP header + TCP header + TCP options)
   frame_length = ETH_HDRLEN + IP6_HDRLEN + TCP_HDRLEN + buf_len;
 
   // Destination and Source MAC addresses

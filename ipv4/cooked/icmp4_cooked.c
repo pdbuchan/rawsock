@@ -39,6 +39,7 @@
 #include <errno.h>            // errno
 
 // Define some constants
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20         // IPv4 header length
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
 #define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
@@ -81,16 +82,16 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -119,11 +120,14 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // ICMP data
-  uint8_t icmpdata[4] = {'T', 'e', 's', 't'};
+  // Use "icmpdata" instead of "icmp_data" because <netinet/ip_icmp.h>
+  // defines icmp_data as a macro, which would conflict with a variable
+  // of the same name.
+  uint8_t icmpdata[] = {'T', 'e', 's', 't'};
   icmp_datalen = 4;
 
   // IPv4 header
@@ -188,7 +192,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -197,16 +201,16 @@ main (void) {
   // Message Type (8 bits): echo request
   icmphdr.icmp_type = ICMP_ECHO;
 
-  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; Set to 0.
   icmphdr.icmp_code = 0;
 
-  // Identifier (16 bits): usually pid of sending process - pick a number
+  // Identifier (16 bits): Usually pid of sending process; Pick a number.
   icmphdr.icmp_id = htons (1000);
 
   // Sequence Number (16 bits)
   icmphdr.icmp_seq = htons (0);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   icmphdr.icmp_cksum = 0;
 
   // Fill out IPv4 datagram.
@@ -223,7 +227,7 @@ main (void) {
   // ICMP data
   memcpy (datagram + IP4_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
   icmphdr.icmp_cksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
   memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
@@ -245,7 +249,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

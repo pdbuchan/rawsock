@@ -40,9 +40,10 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP6_HDRLEN 40         // IPv6 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
-#define TEXT_STRINGLEN 80     // Maximum number of characters in a string
+#define TEXT_STRINGLEN 255    // Maximum number of characters in a string
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -93,9 +94,9 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv6 address: you need to fill this out
+  // Source IPv6 address: You need to fill this out.
   snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
   // Fill out hints for getaddrinfo().
@@ -128,8 +129,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // IPv6 header
 
@@ -223,7 +224,7 @@ main (void) {
   // Urgent pointer (16 bits): 0 (only valid if URG flag is set)
   tcphdr.th_urp = htons (0);
 
-  // TCP checksum (16 bits)
+  // TCP checksum (16 bits): Set to 0 for checksum calculation.
   tcphdr.th_sum = 0;
   tcphdr.th_sum = tcp6_checksum (iphdr, tcphdr, NULL, 0, (uint8_t *) tcp_data, tcp_datalen);
 

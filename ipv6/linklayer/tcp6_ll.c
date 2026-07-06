@@ -14,7 +14,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv6 TCP packet via raw socket at the link layer (ethernet frame).
+// Send an IPv6 TCP packet via raw socket at the link layer (Ethernet frame).
 // Need to have destination MAC address.
 // Values set for SYN packet, no TCP options data.
 
@@ -36,7 +36,6 @@
 #include <net/if.h>           // struct ifreq
 #include <linux/if_ether.h>   // ETH_P_IP = 0x0800, ETH_P_IPV6 = 0x86DD
 #include <linux/if_packet.h>  // struct sockaddr_ll (see man 7 packet)
-#include <net/ethernet.h>
 
 #include <errno.h>            // errno, perror()
 
@@ -241,21 +240,21 @@ main (int argc, char **argv) {
   // TCP checksum (16 bits)
   tcphdr.th_sum = tcp6_checksum (iphdr, tcphdr);
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + TCP header)
+  // Ethernet frame length = Ethernet header (MAC + MAC + Ethernet type) + Ethernet data (IP header + TCP header)
   frame_length = ETH_HDRLEN + IP6_HDRLEN + TCP_HDRLEN;
 
   // Destination and Source MAC addresses
   memcpy (ether_frame, dst_mac, 6 * sizeof (uint8_t));
   memcpy (ether_frame + 6, src_mac, 6 * sizeof (uint8_t));
 
-  // Next is ethernet type code (ETH_P_IPV6 for IPv6).
+  // EtherType (16 bits): ETH_P_IPV6
   // http://www.iana.org/assignments/ethernet-numbers
   ether_frame[12] = ETH_P_IPV6 / 256;
   ether_frame[13] = ETH_P_IPV6 % 256;
 
-  // Next is ethernet frame data (IPv6 header + TCP header).
+  // Next is Ethernet frame data (IPv6 header + TCP header).
 
   // IPv6 header
   memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP6_HDRLEN * sizeof (uint8_t));
@@ -269,7 +268,7 @@ main (int argc, char **argv) {
     exit (EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
+  // Send Ethernet frame to socket.
   if ((bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device))) <= 0) {
     perror ("sendto() failed");
     exit (EXIT_FAILURE);

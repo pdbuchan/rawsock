@@ -14,7 +14,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv4 ARP packet via raw socket at the link layer (ethernet frame) and
+// Send an IPv4 ARP packet via raw socket at the link layer (Ethernet frame) and
 // receive ARP reply.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
@@ -37,26 +37,26 @@
 
 #include <errno.h>            // errno
 
+// Define some constants.
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
+#define ARP_ETH_IPV4_LEN 28   // Complete Ethernet/IPv4 ARP packet
+#define ARPOP_REQUEST 1       // Taken from <linux/if_arp.h>
+#define ARPOP_REPLY 2         // Taken from <linux/if_arp.h>
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
+
 // Define a struct for ARP header
 typedef struct {
   uint16_t htype;
   uint16_t ptype;
   uint8_t hlen;
-  uint8_t plen;
+  uint8_t plen; 
   uint16_t opcode;
-  uint8_t sender_mac[6];
+  uint8_t sender_mac[MAC_LEN];
   uint8_t sender_ip[4];
-  uint8_t target_mac[6];
+  uint8_t target_mac[MAC_LEN];
   uint8_t target_ip[4];
 } ARP_HDR;
-
-// Define some constants.
-#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
-#define IP4_HDRLEN 20         // IPv4 header length
-#define ARP_ETH_IPV4_LEN 28   // Complete Ethernet/IPv4 ARP packet
-#define ARPOP_REQUEST 1       // Taken from <linux/if_arp.h>
-#define ARPOP_REPLY 2         // Taken from <linux/if_arp.h>
-#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
 
 // Function prototypes
 char *allocate_strmem (int);
@@ -69,9 +69,9 @@ main (void) {
   ssize_t bytes;
   char *interface, *target, *src_ip;
   ARP_HDR send_arphdr, *recv_arphdr;
-  uint8_t *src_mac, *dst_mac, *ether_frame;
+  uint8_t src_mac[MAC_LEN] = {0}, dst_mac[MAC_LEN] = {0}, *ether_frame;
   struct addrinfo hints, *res;
-  struct sockaddr_in *ipv4;
+  struct sockaddr_in dst;
   struct sockaddr_ll device, recv_device;
   struct ifreq ifr;
   struct pollfd pfd;
@@ -79,8 +79,6 @@ main (void) {
   memset (&send_arphdr, 0, sizeof (send_arphdr));
 
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
-  dst_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   target = allocate_strmem (HOSTNAME_LEN);
@@ -111,19 +109,20 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, sizeof (src_mac));
 
-  // Set destination MAC address: broadcast address
-  memset (dst_mac, 0xff, 6);
+  // Set destination MAC address to the broadcast address.
+  memset (dst_mac, 0xff, sizeof (dst_mac));
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address (must be a link-local node): you need to fill this out
+  // Destination hostname or IPv4 address (must be directly reachable on the local network).
+  // You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "192.168.0.63");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -143,8 +142,9 @@ main (void) {
     fprintf (stderr, "getaddrinfo() failed for target.\nError message: %s\n", gai_strerror (status));
     exit (EXIT_FAILURE);
   }
-  ipv4 = (struct sockaddr_in *) res->ai_addr;
-  memcpy (&send_arphdr.target_ip, &ipv4->sin_addr, 4);
+  memset (&dst, 0, sizeof (dst));
+  memcpy (&dst, res->ai_addr, res->ai_addrlen);
+  memcpy (send_arphdr.target_ip, &dst.sin_addr, sizeof (send_arphdr.target_ip));
   freeaddrinfo (res);
 
   // Fill out device's sockaddr_ll struct.
@@ -157,19 +157,19 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // ARP header
 
-  // Hardware type (16 bits): 1 for ethernet
+  // Hardware type (16 bits): 1 for Ethernet
   send_arphdr.htype = htons (1);
 
-  // Protocol type (16 bits): 2048 for IP
+  // Protocol type (16 bits): Ethernet type ETH_P_IP (0x0800) for IPv4.
   send_arphdr.ptype = htons (ETH_P_IP);
 
   // Hardware address length (8 bits): 6 bytes for MAC address
-  send_arphdr.hlen = 6;
+  send_arphdr.hlen = MAC_LEN;
 
   // Protocol address length (8 bits): 4 bytes for IPv4 address
   send_arphdr.plen = 4;
@@ -178,32 +178,32 @@ main (void) {
   send_arphdr.opcode = htons (ARPOP_REQUEST);
 
   // Sender hardware address (48 bits): MAC address
-  memcpy (&send_arphdr.sender_mac, src_mac, 6);
+  memcpy (send_arphdr.sender_mac, src_mac, sizeof (send_arphdr.sender_mac));
 
   // Sender protocol address (32 bits)
-  // See getaddrinfo() resolution of src_ip.
+  // See inet_pton() conversion of src_ip.
 
-  // Target hardware address (48 bits): zero, since we don't know it yet.
-  memset (&send_arphdr.target_mac, 0, 6);
+  // Target hardware address (48 bits): Zero, since we don't know it yet.
+  memset (send_arphdr.target_mac, 0, sizeof (send_arphdr.target_mac));
 
   // Target protocol address (32 bits)
   // See getaddrinfo() resolution of target.
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (ARP header)
+  // Ethernet frame length = Ethernet header (MAC + MAC + Ethernet type) + Ethernet data (ARP header)
   frame_length = ETH_HDRLEN + ARP_ETH_IPV4_LEN;
 
   // Destination and Source MAC addresses
-  memcpy (ether_frame, dst_mac, 6);
-  memcpy (ether_frame + 6, src_mac, 6);
+  memcpy (ether_frame, dst_mac, sizeof (dst_mac));
+  memcpy (ether_frame + sizeof (dst_mac), src_mac, sizeof (src_mac));
 
-  // Next is ethernet type code (ETH_P_ARP for ARP).
+  // EtherType (16 bits): ETH_P_ARP
   // http://www.iana.org/assignments/ethernet-numbers
   ether_frame[12] = ETH_P_ARP / 256;
   ether_frame[13] = ETH_P_ARP % 256;
 
-  // Next is ethernet frame data (ARP header).
+  // Next is Ethernet frame data (ARP header).
 
   // ARP header
   memcpy (ether_frame + ETH_HDRLEN, &send_arphdr, ARP_ETH_IPV4_LEN);
@@ -233,7 +233,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
+  // Send Ethernet frame to socket.
   bytes = sendto (sendsd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
   if (bytes == -1) {
     status = errno;
@@ -243,47 +243,47 @@ main (void) {
   // Check for short send.
   if (bytes != frame_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
-  // Print out contents of send ethernet frame.
+  // Print out contents of send Ethernet frame.
   fprintf (stdout, "\nSENT ETHERNET FRAME\n");
   fprintf (stdout, "  Ethernet header:\n");
   fprintf (stdout, "    Destination MAC (broadcast) address: ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", dst_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (dst_mac); i++) {
+    fprintf (stdout, "%02x%s", dst_mac[i], (i < (int) sizeof (dst_mac) - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Source MAC address (this node): ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (src_mac); i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < (int) sizeof (src_mac) - 1) ? ":" : "\n");
   }
-  // Next is ethernet type code (ETH_P_ARP for ARP).
+  // EtherType (16 bits): ETH_P_ARP
   // http://www.iana.org/assignments/ethernet-numbers
   fprintf (stdout, "    Ethernet type code (2054 = ARP): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
 
   fprintf (stdout, "  ARP header:\n");
-  fprintf (stdout, "    Hardware type (1 = ethernet (10 Mb)): %u\n", ntohs (send_arphdr.htype));
-  fprintf (stdout, "    Protocol type (2048 for IPv4 addresses): %u\n", ntohs (send_arphdr.ptype));
+  fprintf (stdout, "    Hardware type (1 = Ethernet (10 Mb)): %u\n", ntohs (send_arphdr.htype));
+  fprintf (stdout, "    Protocol type (ETH_P_IP (0x0800) for IPv4): %u\n", ntohs (send_arphdr.ptype));
   fprintf (stdout, "    Hardware (MAC) address length (bytes): %u\n", send_arphdr.hlen);
   fprintf (stdout, "    Protocol (IPv4) address length (bytes): %u\n", send_arphdr.plen);
   fprintf (stdout, "    Opcode (1 = ARP request): %u\n", ntohs (send_arphdr.opcode));
   fprintf (stdout, "    Sender MAC address (this node): ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", send_arphdr.sender_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (send_arphdr.sender_mac); i++) {
+    fprintf (stdout, "%02x%s", send_arphdr.sender_mac[i], (i < (int) sizeof (send_arphdr.sender_mac) - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Sender IPv4 address: %u.%u.%u.%u\n",
     send_arphdr.sender_ip[0], send_arphdr.sender_ip[1], send_arphdr.sender_ip[2], send_arphdr.sender_ip[3]);
   fprintf (stdout, "    Target MAC address: ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", send_arphdr.target_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (send_arphdr.target_mac); i++) {
+    fprintf (stdout, "%02x%s", send_arphdr.target_mac[i], (i < (int) sizeof (send_arphdr.target_mac) - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Target IPv4 address: %u.%u.%u.%u\n",
     send_arphdr.target_ip[0], send_arphdr.target_ip[1], send_arphdr.target_ip[2], send_arphdr.target_ip[3]);
 
-  // Listen for incoming ethernet frame from socket recvsd.
-  // We expect an ARP ethernet frame of the form:
-  //     MAC (6 bytes) + MAC (6 bytes) + ethernet type (2 bytes)
-  //     + ethernet data (ARP header) (28 bytes)
+  // Listen for incoming Ethernet frame from socket recvsd.
+  // We expect an ARP Ethernet frame of the form:
+  //     MAC (6 bytes) + MAC (6 bytes) + Ethernet type (2 bytes)
+  //     + Ethernet data (ARP header) (28 bytes)
   // Keep at it until we get an ARP reply.
   timeout = 2000;  // Milliseconds
   pfd.fd = recvsd;
@@ -316,7 +316,7 @@ main (void) {
         }
       }
 
-      // Check for sufficient bytes to parse ethernet and ARP headers.
+      // Check for sufficient bytes to parse Ethernet and ARP headers.
       if (bytes < (ETH_HDRLEN + ARP_ETH_IPV4_LEN)) {
         continue;
       }
@@ -327,47 +327,47 @@ main (void) {
       if (((((ether_frame[12]) << 8) + ether_frame[13]) == ETH_P_ARP) &&
         (ntohs (recv_arphdr->htype) == 1) &&
         (ntohs (recv_arphdr->ptype) == ETH_P_IP) &&
-        (recv_arphdr->hlen == 6) &&
+        (recv_arphdr->hlen == MAC_LEN) &&
         (recv_arphdr->plen == 4) &&
         (ntohs (recv_arphdr->opcode) == ARPOP_REPLY) &&
         (memcmp (recv_arphdr->sender_ip, send_arphdr.target_ip, 4) == 0) &&
         (memcmp (recv_arphdr->target_ip, send_arphdr.sender_ip, 4) == 0) &&
-        (memcmp (recv_arphdr->target_mac, src_mac, 6) == 0)) {
+        (memcmp (recv_arphdr->target_mac, src_mac, sizeof (src_mac)) == 0)) {
         break;
       }
     }
   }
 
-  // Print out contents of received ethernet frame.
+  // Print out contents of received Ethernet frame.
   fprintf (stdout, "\nRECEIVED ETHERNET FRAME\n");
   fprintf (stdout, "  Ethernet header:\n");
   fprintf (stdout, "    Destination MAC address (this node): ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", ether_frame[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) recv_arphdr->hlen; i++) {
+    fprintf (stdout, "%02x%s", ether_frame[i], (i < (int) recv_arphdr->hlen - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Source MAC address: ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", ether_frame[i + 6], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) recv_arphdr->hlen; i++) {
+    fprintf (stdout, "%02x%s", ether_frame[i + (int) recv_arphdr->hlen], (i < (int) recv_arphdr->hlen - 1) ? ":" : "\n");
   }
-  // Next is ethernet type code (ETH_P_ARP for ARP).
+  // EtherType (16 bits): ETH_P_ARP
   // http://www.iana.org/assignments/ethernet-numbers
   fprintf (stdout, "    Ethernet type code (2054 = ARP): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
 
   fprintf (stdout, "  ARP header:\n");
-  fprintf (stdout, "    Hardware type (1 = ethernet (10 Mb)): %u\n", ntohs (recv_arphdr->htype));
-  fprintf (stdout, "    Protocol type (2048 for IPv4 addresses): %u\n", ntohs (recv_arphdr->ptype));
+  fprintf (stdout, "    Hardware type (1 = Ethernet (10 Mb)): %u\n", ntohs (recv_arphdr->htype));
+  fprintf (stdout, "    Protocol type (ETH_P_IP (0x0800) for IPv4): %u\n", ntohs (recv_arphdr->ptype));
   fprintf (stdout, "    Hardware (MAC) address length (bytes): %u\n", recv_arphdr->hlen);
   fprintf (stdout, "    Protocol (IPv4) address length (bytes): %u\n", recv_arphdr->plen);
   fprintf (stdout, "    Opcode (2 = ARP reply): %u\n", ntohs (recv_arphdr->opcode));
   fprintf (stdout, "    Sender MAC address: ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", recv_arphdr->sender_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) recv_arphdr->hlen; i++) {
+    fprintf (stdout, "%02x%s", recv_arphdr->sender_mac[i], (i < (int) recv_arphdr->hlen - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Sender IPv4 address: %u.%u.%u.%u\n",
     recv_arphdr->sender_ip[0], recv_arphdr->sender_ip[1], recv_arphdr->sender_ip[2], recv_arphdr->sender_ip[3]);
   fprintf (stdout, "    Target MAC address (this node): ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", recv_arphdr->target_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) recv_arphdr->hlen; i++) {
+    fprintf (stdout, "%02x%s", recv_arphdr->target_mac[i], (i < (int) recv_arphdr->hlen - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Target IPv4 address (this node): %u.%u.%u.%u\n\n",
     recv_arphdr->target_ip[0], recv_arphdr->target_ip[1], recv_arphdr->target_ip[2], recv_arphdr->target_ip[3]);
@@ -377,8 +377,6 @@ main (void) {
   close (recvsd);
 
   // Free allocated memory.
-  free (src_mac);
-  free (dst_mac);
   free (ether_frame);
   free (interface);
   free (target);

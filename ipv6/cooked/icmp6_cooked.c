@@ -39,6 +39,7 @@
 #include <errno.h>            // errno
 
 // Define some constants
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP6_HDRLEN 40         // IPv6 header length
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
 #define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
@@ -77,12 +78,12 @@ main (void) {
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv6 address: you need to fill this out
+  // Source IPv6 address: You need to fill this out.
   snprintf (src_ip, INET6_ADDRSTRLEN, "2001:db8::214:51ff:fe2f:1556");
 
-  // Destination hostname or IPv6 address: you need to fill this out
+  // Destination hostname or IPv6 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "ipv6.google.com");
 
   // Fill out hints for getaddrinfo().
@@ -115,11 +116,11 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // ICMP data
-  uint8_t icmp_data[4] = {'T', 'e', 's', 't'};
+  uint8_t icmp_data[] = {'T', 'e', 's', 't'};
   icmp_datalen = 4;
 
   // IPv6 header
@@ -187,7 +188,7 @@ main (void) {
   // ICMP data
   memcpy (datagram + IP6_HDRLEN + ICMP_HDRLEN, icmp_data, icmp_datalen);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
   icmphdr.icmp6_cksum = icmp6_checksum (iphdr, datagram + IP6_HDRLEN, ICMP_HDRLEN + icmp_datalen);
   memcpy (datagram + IP6_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
@@ -262,7 +263,7 @@ checksum (uint8_t *addr, int len) {
   return (htons (answer));
 }
 
-// Build IPv6 ICMP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
+// Build ICMPv6 pseudo-header and call checksum function (Section 8.1 of RFC 2460).
 uint16_t
 icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
 

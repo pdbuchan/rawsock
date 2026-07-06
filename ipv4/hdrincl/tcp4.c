@@ -79,14 +79,14 @@ main (void) {
   // Interface to send datagram through.
   snprintf (interface, IFNAMSIZ, "enp7s0");
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -167,7 +167,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -198,7 +198,7 @@ main (void) {
   // FIN flag (1 bit)
   tcp_flags[0] = 0;
 
-  // SYN flag (1 bit): set to 1
+  // SYN flag (1 bit): Set to 1.
   tcp_flags[1] = 1;
 
   // RST flag (1 bit)
@@ -242,7 +242,7 @@ main (void) {
   // Next part of datagram is upper layer protocol header.
   memcpy ((datagram + IP4_HDRLEN), &tcphdr, TCP_HDRLEN);
 
-  // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
+  // The kernel is going to prepare layer 2 information (Ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it
   // to decide where to send the raw datagram. We fill in a struct in_addr with
   // the desired destination IP address, and pass this structure to the sendto() function.
@@ -282,7 +282,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

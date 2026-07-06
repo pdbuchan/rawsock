@@ -15,7 +15,7 @@
 */
 
 // Perform a traceroute by sending IPv4 TCP, UDP, or ICMP packets via
-// raw socket at the link layer (ethernet frame).
+// raw socket at the link layer (Ethernet frame).
 // Need to have destination MAC address.
 // TCP set for SYN, UDP for port unreachable, ICMP for echo request (ping).
 
@@ -48,6 +48,7 @@
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20         // IPv4 header length
 #define TCP_HDRLEN 20         // TCP header length, excludes options data
 #define UDP_HDRLEN 8          // UDP header length, excludes data
@@ -76,7 +77,7 @@ main (void) {
   struct ip *iphdr;
   struct tcphdr *tcphdr;
   struct icmp *icmphdr;
-  uint8_t *src_mac;
+  uint8_t src_mac[MAC_LEN] = {0};
   uint8_t *snd_ether_frame, *rec_ether_frame;
   uint8_t *data;
   uint16_t tcp_sport, icmpid, icmpseq, udp_sport, udp_dport;
@@ -108,10 +109,10 @@ main (void) {
   // Random number seed
   srand ((unsigned) time (NULL));
 
-  // ICMP Identifier (16 bits): Usually pid of sending process; you can choose.
+  // ICMP Identifier (16 bits): Usually pid of sending process; You can choose.
   icmpid = htons (1000);
 
-  // UDP source port (16 bits each); you can choose.
+  // UDP source port (16 bits each); You can choose.
   udp_sport = htons (4950);
 
   // Allocate memory for various arrays.
@@ -120,7 +121,6 @@ main (void) {
   udp_dat = allocate_strmem (IP_MAXPACKET);
   data = allocate_ustrmem (IP_MAXPACKET);
   rec_ip = allocate_strmem (INET_ADDRSTRLEN);
-  src_mac = allocate_ustrmem (6);
   snd_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   rec_ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
@@ -151,14 +151,14 @@ main (void) {
   // You need to put your network interface name here.
   snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
-  // Submit request for a socket descriptor to lookup interface.
+  // Submit request for a socket descriptor to look up interface.
   if ((sd = socket (AF_INET, SOCK_DGRAM, 0)) < 0) {
     status = errno;
     fprintf (stderr, "socket() failed to get socket descriptor for using ioctl().\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
-  // Use ioctl() to lookup interface and get MAC address.
+  // Use ioctl() to look up interface and get MAC address.
   memset (&ifr, 0, sizeof (ifr));
   n = snprintf (ifr.ifr_name, sizeof (ifr.ifr_name), "%s", interface);
   if ((n < 0) || (n >= (int) sizeof (ifr.ifr_name))) {
@@ -173,26 +173,26 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, sizeof (src_mac));
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (src_mac); i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < (int) sizeof (src_mac) - 1) ? ":" : "\n");
   }
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -221,8 +221,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // Show target of traceroute.
   switch (packet_type) {
@@ -278,7 +278,7 @@ main (void) {
   // Set flag to make receive socket non-blocking.
   if (fcntl (recsd, F_SETFL, flags | O_NONBLOCK) == -1) {
     status = errno;
-    fprintf (stderr, "fcntl() failed to set non-blcoking flag on receive socket.\nError message: %s\n", strerror (status));
+    fprintf (stderr, "fcntl() failed to set non-blocking flag on receive socket.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
 
@@ -328,11 +328,11 @@ main (void) {
       fprintf (stderr, "Unknown packet type: %d\n", packet_type);
       exit (EXIT_FAILURE);
 
-  }  // End swtich
+  }  // End switch
 
   // SEND
 
-    // Send ethernet frame to socket.
+    // Send Ethernet frame to socket.
     bytes = sendto (sendsd, snd_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
     if (bytes == -1) {
       status = errno;
@@ -342,7 +342,7 @@ main (void) {
     // Check for short send.  
     if (bytes != frame_length) {
       fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-      exit(EXIT_FAILURE);
+      exit (EXIT_FAILURE);
     }
 
     // Increment probe count.
@@ -355,17 +355,18 @@ main (void) {
       exit (EXIT_FAILURE);
     }
 
-    // Listen for incoming ethernet frame from socket recsd.
+    // Listen for incoming Ethernet frame from socket recsd.
     // 
-    // If we haven't reached the destination (because TTL reached 0), we expect an ICMP ethernet frame of the form:
-    //     MAC (6 bytes) + MAC (6 bytes) + ethernet type (2 bytes) +
+    // If we haven't reached the destination (because TTL reached 0), we expect an ICMP Ethernet frame of the form:
+    //     MAC (6 bytes) + MAC (6 bytes) + Ethernet type (2 bytes) +
     //     Outer IP header + ICMP header + inner IP header + TCP*/ICMP/UDP header
     //     *Note: Many routers only provide the first 8 bytes of TCP header in reply. Payload almost certainly won't be included.
     // If we have reached our destination (i.e., we did not receive an ICMP_TIME_EXCEEDED (reached destination before TTL reached 0)), we expect:
-    //     MAC (6 bytes) + MAC (6 bytes) + ethernet type (2 bytes) + one of:
+    //     MAC (6 bytes) + MAC (6 bytes) + Ethernet type (2 bytes) + one of:
     //     IP header + TCP (SYN-ACK or RST)
     //     IP header + ICMP (echo reply) + payload
     //     Outer IP header + Inner IP header + ICMP (port unreachable) + payload
+    // Keep listening for up to TIMEOUT seconds, or until a reply is received.
 
     // RECEIVE LOOP
     for (;;) {
@@ -439,7 +440,7 @@ main (void) {
           }
         }
 
-        // Check for sufficient bytes to parse ethernet header.
+        // Check for sufficient bytes to parse Ethernet header.
         if ((bytes >= 0) && (bytes < ETH_HDRLEN)) continue;
 
       // poll() returned, but no readable data was available; keep listening.
@@ -447,7 +448,7 @@ main (void) {
         continue;
       }
 
-      // Check for an IP ethernet frame. If not, ignore and keep listening.
+      // Check for an IPv4 Ethernet frame. If not, ignore and keep listening.
       if (((rec_ether_frame[12] << 8) + rec_ether_frame[13]) == ETH_P_IP) {
 
         // Check for sufficient bytes to parse IP header.
@@ -517,9 +518,9 @@ main (void) {
           remaining = TIMEOUT - elapsed;
           if (remaining < 0) remaining = 0;
 
-          // Extract source IP address from received ethernet frame.
+          // Extract source IPv4 address from received Ethernet frame.
           if (inet_ntop (AF_INET, &(iphdr->ip_src.s_addr), rec_ip, INET_ADDRSTRLEN) == NULL) {
-            fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s", strerror (errno));
+            fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s\n", strerror (errno));
             exit (EXIT_FAILURE);
           }
 
@@ -531,14 +532,14 @@ main (void) {
             sa.sin_family = AF_INET;
             if ((status = inet_pton (AF_INET, rec_ip, &sa.sin_addr)) != 1) {
               if (status == 0) {
-                fprintf (stderr, "inet_pton() failed for received source address.\nError message: Invalid address");
+                fprintf (stderr, "inet_pton() failed for received source address.\nError message: Invalid address\n");
               } else if (status < 0) {
-                fprintf (stderr, "inet_pton() failed for received source address.\nError message: %s", strerror (errno));
+                fprintf (stderr, "inet_pton() failed for received source address.\nError message: %s\n", strerror (errno))
               }
               exit (EXIT_FAILURE);
             }
             if ((status = getnameinfo ((struct sockaddr*)&sa, sizeof (sa), hostname, sizeof (hostname), NULL, 0, 0)) != 0) {
-              fprintf (stderr, "getnameinfo() failed for received source address.\nError message: %s", gai_strerror (status));
+              fprintf (stderr, "getnameinfo() failed for received source address.\nError message: %s\n", gai_strerror (status));
               exit (EXIT_FAILURE);
             }
             fprintf (stdout, "%2d  %s (%s)  %g ms (%zd bytes received)", node, rec_ip, hostname, elapsed * 1000.0, bytes);
@@ -607,10 +608,10 @@ main (void) {
 
           }  // End switch
 
-          // Extract source IP address from received ethernet frame.
+          // Extract source IPv4 address from received Ethernet frame.
           if (inet_ntop (AF_INET, &(iphdr->ip_src.s_addr), rec_ip, INET_ADDRSTRLEN) == NULL) {
             status = errno;
-            fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s", strerror (status));
+            fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s\n", strerror (status));
             exit (EXIT_FAILURE);
           }
 
@@ -659,7 +660,6 @@ main (void) {
   free (icmp_dat);
   free (udp_dat);
   free (data);
-  free (src_mac);
   free (snd_ether_frame);
   free (rec_ether_frame);
   free (interface);
@@ -671,7 +671,7 @@ main (void) {
   return (EXIT_SUCCESS);
 }
 
-// Create a TCP ethernet frame.
+// Create a TCP Ethernet frame.
 int
 create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t *src_mac, uint8_t *dst_mac,
                   uint16_t tcp_sport, int ttl, uint8_t *data, int datalen) {
@@ -698,10 +698,10 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
-  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
+  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram.
   iphdr.ip_off = htons (0);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = ttl;
 
   // Transport layer protocol (8 bits): 6 for TCP
@@ -710,9 +710,9 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Source IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, src_ip, &(iphdr.ip_src))) != 1) {
     if (status == 0) {
-      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address");
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
     } else if (status < 0) {
-      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (errno));
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
     }
     exit (EXIT_FAILURE);
   }
@@ -720,14 +720,14 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Destination IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, dst_ip, &(iphdr.ip_dst))) != 1) {
     if (status == 0) {
-      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address");
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
     } else if (status < 0) {
-      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (errno));
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
     }
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -743,10 +743,10 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   seq = ((uint32_t) rand () << 16) | ((uint32_t) rand () & 0xffff);
   tcphdr.th_seq = htonl (seq);
 
-  // Acknowledgement number (32 bits): not used in initial SYN packet.
+  // Acknowledgement number (32 bits): Not used in initial SYN packet.
   tcphdr.th_ack = htonl (0);
 
-  // Reserved (4 bits): should be 0
+  // Reserved (4 bits): Should be 0.
   tcphdr.th_x2 = 0;
 
   // Data offset (4 bits): size of TCP header in 32-bit words
@@ -754,7 +754,7 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
 
   // Flags (8 bits)
 
-  // SYN flag (1 bit): set to 1
+  // SYN flag (1 bit): Set to 1.
   tcphdr.th_flags = TH_SYN;
 
   // Window size (16 bits)
@@ -767,18 +767,18 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   tcphdr.th_sum = 0;
   tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, data, datalen);
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
   // Destination and Source MAC addresses
-  memcpy (snd_ether_frame, dst_mac, 6);
-  memcpy (snd_ether_frame + 6, src_mac, 6);
+  memcpy (snd_ether_frame, dst_mac, MAC_LEN);
+  memcpy (snd_ether_frame + MAC_LEN, src_mac, MAC_LEN);
 
-  // Next is ethernet type code (ETH_P_IP for IPv4).
+  // EtherType (16 bits): ETH_P_IP
   // http://www.iana.org/assignments/ethernet-numbers
   snd_ether_frame[12] = ETH_P_IP / 256;
   snd_ether_frame[13] = ETH_P_IP % 256;
 
-  // Next is ethernet frame data (IPv4 header + TCP header).
+  // Next is Ethernet frame data (IPv4 header + TCP header).
 
   // IPv4 header
   memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
@@ -792,7 +792,7 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   return (EXIT_SUCCESS);
 }
 
-// Create a ICMP ethernet frame.
+// Create a ICMP Ethernet frame.
 int
 create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t *src_mac, uint8_t *dst_mac,
                    uint16_t icmpid, uint16_t icmpseq, int ttl, uint8_t *data, int datalen) {
@@ -818,10 +818,10 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
-  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
+  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram.
   iphdr.ip_off = htons (0);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = ttl;
 
   // Transport layer protocol (8 bits): 1 for ICMP
@@ -830,9 +830,9 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // Source IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, src_ip, &(iphdr.ip_src))) != 1) {
     if (status == 0) {
-      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address");
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
     } else if (status < 0) {
-      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (errno));
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
     }
     exit (EXIT_FAILURE);
   }
@@ -840,14 +840,14 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // Destination IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, dst_ip, &(iphdr.ip_dst))) != 1) {
     if (status == 0) {
-      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address");
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
     } else if (status < 0) {
-      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (errno));
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
     }
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -862,24 +862,24 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // Identifier (16 bits)
   icmphdr.icmp_id = icmpid;
 
-  // Sequence Number (16 bits): starts at 0
+  // Sequence Number (16 bits): Starts at 0.
   icmphdr.icmp_seq = icmpseq;
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   icmphdr.icmp_cksum = 0;
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
   // Destination and Source MAC addresses
-  memcpy (snd_ether_frame, dst_mac, 6);
-  memcpy (snd_ether_frame + 6, src_mac, 6);
+  memcpy (snd_ether_frame, dst_mac, MAC_LEN);
+  memcpy (snd_ether_frame + MAC_LEN, src_mac, MAC_LEN);
 
-  // Next is ethernet type code (ETH_P_IP for IPv4).
+  // EtherType (16 bits): ETH_P_IP
   // http://www.iana.org/assignments/ethernet-numbers
   snd_ether_frame[12] = ETH_P_IP / 256;
   snd_ether_frame[13] = ETH_P_IP % 256;
 
-  // Next is ethernet frame data (IPv4 header + ICMP header + ICMP data).
+  // Next is Ethernet frame data (IPv4 header + ICMP header + ICMP data).
 
   // IPv4 header
   memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
@@ -890,7 +890,7 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   // ICMP data
   memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN, data, datalen);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
   icmphdr.icmp_cksum = checksum ((uint8_t *) (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN), ICMP_HDRLEN + datalen);
   memcpy (snd_ether_frame + ETH_HDRLEN + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);
@@ -898,7 +898,7 @@ create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t
   return (EXIT_SUCCESS);
 }
 
-// Create a UDP ethernet frame.
+// Create a UDP Ethernet frame.
 int
 create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t *src_mac, uint8_t *dst_mac,
                   uint16_t udp_sport, uint16_t udp_dport, int ttl, uint8_t *data, int datalen) {
@@ -936,9 +936,9 @@ create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Source IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, src_ip, &(iphdr.ip_src))) != 1) {
     if (status == 0) {
-      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address");
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: Invalid address\n");
     } else if (status < 0) {
-      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s", strerror (errno));
+      fprintf (stderr, "inet_pton() failed for source address.\nError message: %s\n", strerror (errno));
     }
     exit (EXIT_FAILURE);
   }
@@ -946,14 +946,14 @@ create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Destination IPv4 address (32 bits)
   if ((status = inet_pton (AF_INET, dst_ip, &(iphdr.ip_dst))) != 1) {
     if (status == 0) {
-      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address");
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: Invalid address\n");
     } else if (status < 0) {
-      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s", strerror (errno));
+      fprintf (stderr, "inet_pton() failed for destination address.\nError message: %s\n", strerror (errno));
     }
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -972,18 +972,18 @@ create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   udphdr.uh_sum = 0;
   udphdr.uh_sum = udp4_checksum (iphdr, udphdr, data, datalen);
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
   // Destination and Source MAC addresses
-  memcpy (snd_ether_frame, dst_mac, 6);
-  memcpy (snd_ether_frame + 6, src_mac, 6);
+  memcpy (snd_ether_frame, dst_mac, MAC_LEN);
+  memcpy (snd_ether_frame + MAC_LEN, src_mac, MAC_LEN);
 
-  // Next is ethernet type code (ETH_P_IP for IPv4).
+  // EtherType (16 bits): ETH_P_IP
   // http://www.iana.org/assignments/ethernet-numbers
   snd_ether_frame[12] = ETH_P_IP / 256;
   snd_ether_frame[13] = ETH_P_IP % 256;
 
-  // Next is ethernet frame data (IPv4 header + UDP header + UDP data).
+  // Next is Ethernet frame data (IPv4 header + UDP header + UDP data).
   // IPv4 header
   memcpy (snd_ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
 

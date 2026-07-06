@@ -14,7 +14,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send an IPv4 HTTP GET packet via raw TCP socket at the link layer (ethernet frame).
+// Send an IPv4 HTTP GET packet via raw TCP socket at the link layer (Ethernet frame).
+// Demonstration packet only; a real HTTP GET requires an established TCP connection.
 // Need to have destination MAC address.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
@@ -40,10 +41,13 @@
 #include <errno.h>            // errno
 
 // Define some constants.
-#define ETH_HDRLEN ETH_HLEN  // Ethernet header length
-#define IP4_HDRLEN 20        // IPv4 header length
-#define TCP_HDRLEN 20        // TCP header length, excludes options data
-#define TEXT_STRINGLEN 80    // Maximum number of characters in a string
+#define ETH_HDRLEN ETH_HLEN   // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
+#define IP4_HDRLEN 20         // IPv4 header length
+#define TCP_HDRLEN 20         // TCP header length, excludes options data
+#define HOSTNAME_LEN 255      // Maximum FQDN length including terminating null byte
+#define PATH_LEN 255          // Maximum length of directory path
+#define FILENAME_LEN 255      // Maximum length of filename
 
 // Function prototypes
 uint16_t checksum (uint8_t *, int);
@@ -59,9 +63,9 @@ main (void) {
   char *interface, *src_ip, *dst_ip;
   struct ip iphdr;
   struct tcphdr tcphdr;
-  char *payload, *url, *directory, *filename;
-  int payloadlen;
-  uint8_t *src_mac, *ether_frame;
+  char *tcp_data, *url, *directory, *filename;
+  int tcp_datalen;
+  uint8_t src_mac[MAC_LEN] = {0}, *ether_frame;
   uint32_t seq;
   struct addrinfo hints, *res;
   struct sockaddr_in dst;
@@ -72,25 +76,24 @@ main (void) {
   memset (&tcphdr, 0, sizeof (tcphdr));
 
   // Allocate memory for various arrays.
-  src_mac = allocate_ustrmem (6);
   ether_frame = allocate_ustrmem (ETH_HDRLEN + IP_MAXPACKET);
   interface = allocate_strmem (sizeof (ifr.ifr_name));
   src_ip = allocate_strmem (INET_ADDRSTRLEN);
   dst_ip = allocate_strmem (INET_ADDRSTRLEN);
-  payload = allocate_strmem (IP_MAXPACKET);
-  url = allocate_strmem (TEXT_STRINGLEN);
-  directory = allocate_strmem (TEXT_STRINGLEN);
-  filename = allocate_strmem (TEXT_STRINGLEN);
+  tcp_data = allocate_strmem (IP_MAXPACKET);
+  url = allocate_strmem (HOSTNAME_LEN);
+  directory = allocate_strmem (PATH_LEN);
+  filename = allocate_strmem (FILENAME_LEN);
 
   // Random number seed
   srand ((unsigned) time (NULL));
 
   // Set TCP data.
-  snprintf (url, TEXT_STRINGLEN, "www.google.com");
-  snprintf (directory, TEXT_STRINGLEN, "/some_directory_path/");
-  snprintf (filename, TEXT_STRINGLEN, "filename");
-  snprintf (payload, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
-  payloadlen = strlen (payload);
+  snprintf (url, HOSTNAME_LEN, "www.google.com");
+  snprintf (directory, PATH_LEN, "/some_directory_path/");
+  snprintf (filename, FILENAME_LEN, "filename");  // File we want to get
+  snprintf (tcp_data, IP_MAXPACKET, "GET %s%s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", directory, filename, url);
+  tcp_datalen = strnlen (tcp_data, IP_MAXPACKET);
 
   // Interface to send packet through.
   snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
@@ -117,23 +120,23 @@ main (void) {
   close (sd);
 
   // Copy source MAC address.
-  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, 6);
+  memcpy (src_mac, ifr.ifr_hwaddr.sa_data, sizeof (src_mac));
 
   // Report source MAC address to stdout.
   fprintf (stdout, "MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", src_mac[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < (int) sizeof (src_mac); i++) {
+    fprintf (stdout, "%02x%s", src_mac[i], (i < (int) sizeof (src_mac) - 1) ? ":" : "\n");
   }
 
   // Destination Ethernet MAC address: You need to fill these out.
   // For off-link destinations, this is normally the next-hop router's MAC address.
-  uint8_t dst_mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+  uint8_t dst_mac[MAC_LEN] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -162,8 +165,8 @@ main (void) {
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "Index for interface %s is %d\n", interface, device.sll_ifindex);
-  memcpy (device.sll_addr, dst_mac, 6);
-  device.sll_halen = 6;
+  memcpy (device.sll_addr, dst_mac, sizeof (dst_mac));
+  device.sll_halen = sizeof (dst_mac);
 
   // IPv4 header
 
@@ -177,7 +180,7 @@ main (void) {
   iphdr.ip_tos = 0;
 
   // Total length of datagram (16 bits): IP header + TCP header + TCP data
-  iphdr.ip_len = htons (IP4_HDRLEN + TCP_HDRLEN + payloadlen);
+  iphdr.ip_len = htons (IP4_HDRLEN + TCP_HDRLEN + tcp_datalen);
 
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
@@ -227,7 +230,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -289,25 +292,25 @@ main (void) {
   // Urgent pointer (16 bits): 0 (only valid if URG flag is set)
   tcphdr.th_urp = htons (0);
 
-  // TCP checksum (16 bits)
+  // TCP checksum (16 bits): Set to 0 for checksum calculation.
   tcphdr.th_sum = 0;
-  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, (uint8_t *) payload, payloadlen);
+  tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, (uint8_t *) tcp_data, tcp_datalen);
 
-  // Fill out ethernet frame header.
+  // Fill out Ethernet frame header.
 
-  // Ethernet frame length = ethernet header (MAC + MAC + ethernet type) + ethernet data (IP header + TCP header + TCP data)
-  frame_length = ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN + payloadlen;
+  // Ethernet frame length = Ethernet header (MAC + MAC + Ethernet type) + Ethernet data (IP header + TCP header + TCP data)
+  frame_length = ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN + tcp_datalen;
 
   // Destination and Source MAC addresses
-  memcpy (ether_frame, dst_mac, 6);
-  memcpy (ether_frame + 6, src_mac, 6);
+  memcpy (ether_frame, dst_mac, sizeof (dst_mac));
+  memcpy (ether_frame + sizeof (dst_mac), src_mac, sizeof (src_mac));
 
-  // Next is ethernet type code (ETH_P_IP for IPv4).
+  // EtherType (16 bits): ETH_P_IP
   // http://www.iana.org/assignments/ethernet-numbers
   ether_frame[12] = ETH_P_IP / 256;
   ether_frame[13] = ETH_P_IP % 256;
 
-  // Next is ethernet frame data (IPv4 header + TCP header + TCP data).
+  // Next is Ethernet frame data (IPv4 header + TCP header + TCP data).
 
   // IPv4 header
   memcpy (ether_frame + ETH_HDRLEN, &iphdr, IP4_HDRLEN);
@@ -316,7 +319,7 @@ main (void) {
   memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN, &tcphdr, TCP_HDRLEN);
 
   // TCP data
-  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN, payload, payloadlen);
+  memcpy (ether_frame + ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN, tcp_data, tcp_datalen);
 
   // Submit request for a raw socket descriptor.
   if ((sd = socket (PF_PACKET, SOCK_RAW, htons (ETH_P_ALL))) < 0) {
@@ -325,7 +328,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Send ethernet frame to socket.
+  // Send Ethernet frame to socket.
   bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
   if (bytes == -1) {
     status = errno;
@@ -335,19 +338,18 @@ main (void) {
   // Check for short send.
   if (bytes != frame_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.
   close (sd);
 
   // Free allocated memory.
-  free (src_mac);
   free (ether_frame);
   free (interface);
   free (src_ip);
   free (dst_ip);
-  free (payload);
+  free (tcp_data);
   free (url);
   free (directory);
   free (filename);

@@ -76,14 +76,14 @@ main (void) {
   // Interface to send datagram through.
   snprintf (interface, IFNAMSIZ, "enp7s0");
 
-  // Source IPv4 address: you need to fill this out
+  // Source IPv4 address: You need to fill this out.
   snprintf (src_ip, INET_ADDRSTRLEN, "192.168.0.9");
 
-  // Destination hostname or IPv4 address: you need to fill this out
+  // Destination hostname or IPv4 address: You need to fill this out.
   snprintf (target, HOSTNAME_LEN, "www.google.com");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -103,7 +103,10 @@ main (void) {
   freeaddrinfo (res);
 
   // ICMP data
-  uint8_t icmpdata[4] = {'T', 'e', 's', 't'};
+  // Use "icmpdata" instead of "icmp_data" because <netinet/ip_icmp.h>
+  // defines icmp_data as a macro, which would conflict with a variable
+  // of the same name.
+  uint8_t icmpdata[] = {'T', 'e', 's', 't'};
   icmp_datalen = 4;
 
   // IPv4 header
@@ -168,7 +171,7 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // IPv4 header checksum (16 bits): set to 0 when calculating checksum
+  // IPv4 header checksum (16 bits): Set to 0 when calculating checksum.
   iphdr.ip_sum = 0;
   iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 
@@ -177,16 +180,16 @@ main (void) {
   // Message Type (8 bits): echo request
   icmphdr.icmp_type = ICMP_ECHO;
 
-  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; Set to 0.
   icmphdr.icmp_code = 0;
 
-  // Identifier (16 bits): usually pid of sending process - pick a number
+  // Identifier (16 bits): Usually pid of sending process; Pick a number.
   icmphdr.icmp_id = htons (1000);
 
-  // Sequence Number (16 bits): starts at 0
+  // Sequence Number (16 bits): Starts at 0.
   icmphdr.icmp_seq = htons (0);
 
-  // ICMP header checksum (16 bits): set to 0 when calculating checksum
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   icmphdr.icmp_cksum = 0;
 
   // Prepare IPv4 datagram.
@@ -200,12 +203,12 @@ main (void) {
   // Finally, add the ICMP data.
   memcpy (datagram + IP4_HDRLEN + ICMP_HDRLEN, icmpdata, icmp_datalen);
 
-  // ICMP header checksum (16 bits)
+  // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
   // Already set to 0 above.
   icmphdr.icmp_cksum = icmp4_checksum (datagram + IP4_HDRLEN, ICMP_HDRLEN + icmp_datalen);
   memcpy (datagram + IP4_HDRLEN, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
-  // The kernel is going to prepare layer 2 information (ethernet frame header) for us.
+  // The kernel is going to prepare layer 2 information (Ethernet frame header) for us.
   // For that, we need to specify a destination for the kernel in order for it
   // to decide where to send the raw datagram. We fill in a struct in_addr with
   // the desired destination IP address, and pass this structure to the sendto() function.
@@ -245,7 +248,7 @@ main (void) {
   // Check for short send.
   if (bytes != datagram_length) {
     fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, datagram_length);
-    exit(EXIT_FAILURE);
+    exit (EXIT_FAILURE);
   }
 
   // Close socket descriptor.

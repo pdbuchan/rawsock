@@ -35,6 +35,7 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define ICMP_HDRLEN 8         // ICMP header length for echo request, excludes data
 #define TLLA_OPTLEN 8         // Target Link-Layer Address option length
 
@@ -84,7 +85,7 @@ main (void) {
   snprintf (target, INET6_ADDRSTRLEN, "ff02::1");
 
   // Fill out hints for getaddrinfo().
-  memset (&hints, 0, sizeof (struct addrinfo));
+  memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
   hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
@@ -134,8 +135,8 @@ main (void) {
 
   // Report advertising node MAC address to stdout.
   fprintf (stdout, "Advertising node's MAC address for interface %s is ", interface);
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", (uint8_t) ifr.ifr_addr.sa_data[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < MAC_LEN; i++) {
+    fprintf (stdout, "%02x%s", (uint8_t) ifr.ifr_addr.sa_data[i], (i < (MAC_LEN - 1)) ? ":" : "\n");
   }
 
   // Find interface index from interface name.
@@ -152,7 +153,7 @@ main (void) {
   // Message Type (8 bits): Neighbor Advertisement
   nahdr.nd_na_hdr.icmp6_type = ND_NEIGHBOR_ADVERT;
 
-  // Message Code (8 bits): Not used for neighbor advertisement; set to 0.
+  // Message Code (8 bits): Not used for neighbor advertisement; Set to 0.
   nahdr.nd_na_hdr.icmp6_code = 0;
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
@@ -171,7 +172,7 @@ main (void) {
   uint8_t icmp_data[TLLA_OPTLEN];  // Target Link-Layer Address option.
   icmp_data[0] = 2;  // Option Type - "target link layer address" (Section 4.6 of RFC 4861)
   icmp_data[1] = TLLA_OPTLEN / 8;  // Option Length - units of 8 octets (RFC 4861)
-  for (i = 0; i < 6; i++) {
+  for (i = 0; i < MAC_LEN; i++) {
     icmp_data[i + 2] = (uint8_t) ifr.ifr_addr.sa_data[i];
   }
 
@@ -215,6 +216,7 @@ main (void) {
   pktinfo->ipi6_ifindex = ifindex;
   pktinfo->ipi6_addr = src.sin6_addr;
 
+  // Checksum already set to 0 above.
   nahdr.nd_na_hdr.icmp6_cksum = icmp6_checksum (iphdr, icmp_msg, sizeof (icmp_msg));
   memcpy (icmp_msg, &nahdr, sizeof (struct nd_neighbor_advert));  // Save ICMP header with checksum to datagram.
   fprintf (stdout, "Checksum: %x\n", ntohs (nahdr.nd_na_hdr.icmp6_cksum));
@@ -287,7 +289,7 @@ checksum (uint8_t *addr, int len) {
   return (htons (answer));
 }
 
-// Build IPv6 ICMP pseudo-header and call checksum function (Section 8.1 of RFC 2460).
+// Build ICMPv6 pseudo-header and call checksum function (Section 8.1 of RFC 2460).
 uint16_t
 icmp6_checksum (struct ip6_hdr iphdr, uint8_t *icmp_msg, int icmp_len) {
 

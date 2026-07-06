@@ -15,7 +15,7 @@
 */
 
 // Receive an IPv4 router advertisement and extract
-// various information stored in the ethernet frame.
+// various information stored in the Ethernet frame.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
 #include <stdio.h>
@@ -47,6 +47,7 @@ typedef struct {
 
 // Define some constants.
 #define ETH_HDRLEN ETH_HLEN  // Ethernet header length
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define IP4_HDRLEN 20        // IPv4 header length
 #define ICMP_HDRLEN 8        // IPv4 ICMP header length excluding data
 #define TIMEOUT 60000        // Request timeout in milliseconds
@@ -80,10 +81,10 @@ main (void) {
     exit (EXIT_FAILURE);
   }
 
-  // Listen for incoming ethernet frame from socket sd.
-  // We expect a router advertisment ethernet frame of the form:
-  //     MAC (6 bytes) + MAC (6 bytes) + ethernet type (2 bytes)
-  //     + ethernet data (IPv4 header + RA header)
+  // Listen for incoming Ethernet frame from socket sd.
+  // We expect a router advertisement Ethernet frame of the form:
+  //     MAC (6 bytes) + MAC (6 bytes) + Ethernet type (2 bytes)
+  //     + Ethernet data (IPv4 header + RA header)
   // Keep at it until we get a router advertisement.
   pfd.fd = sd;
   pfd.events = POLLIN;
@@ -133,7 +134,7 @@ main (void) {
         }
       }
 
-      // Check for sufficient bytes to parse ethernet, IP, and ICMP headers.
+      // Check for sufficient bytes to parse Ethernet, IPv4, and ICMP headers.
       if (bytes < (ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN)) {
         continue;
       }
@@ -170,7 +171,7 @@ main (void) {
         continue;
       }
 
-      // Ensure valid Address Entry Size (units of 32-bit words); Must be 2.
+      // Ensure valid Address Entry Size: 2 units of 32-bit words.
       if (icmphdr->entry_size != 2) {
         continue;
       }
@@ -186,32 +187,33 @@ main (void) {
   }
   close (sd);
 
-  // Print out contents of received ethernet frame.
+  // Print out contents of received Ethernet frame.
   fprintf (stdout, "\nRECEIVED ETHERNET FRAME\n");
   fprintf (stdout, "  Ethernet frame header:\n");
   fprintf (stdout, "    Destination MAC address (expect 01:00:5e:00:00:01 associated with IPv4 all-devices multi-cast address): ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", ether_frame[i], (i < 5) ? ":" : "\n");
+  for (i = 0; i < MAC_LEN ; i++) {
+    fprintf (stdout, "%02x%s", ether_frame[i], (i < MAC_LEN - 1) ? ":" : "\n");
   }
   fprintf (stdout, "    Source MAC address: ");
-  for (i = 0; i < 6; i++) {
-    fprintf (stdout, "%02x%s", ether_frame[i + 6], (i < 5) ? ":" : "\n");
+  for (i = 0; i < MAC_LEN; i++) {
+    fprintf (stdout, "%02x%s", ether_frame[i + MAC_LEN], (i < MAC_LEN - 1) ? ":" : "\n");
   }
-  // Next is ethernet type code (ETH_P_IP for IPv4 packets).
+
+  // EtherType (16 bits): ETH_P_IP
   // http://www.iana.org/assignments/ethernet-numbers
-  fprintf (stdout, "    Ethernet type code (2048 = IPv4): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
+  fprintf (stdout, "    Ethernet type code (ETH_P_IP (0x0800) for IPv4): %u\n\n", ((ether_frame[12]) << 8) + ether_frame[13]);
 
   fprintf (stdout, "  IPv4 header\n");
-  fprintf (stdout, "    IPv4 transport layer protocol (1 = ICMP): %u\n", iphdr->ip_p);
+  fprintf (stdout, "    IPv4 Protocol field (1 = ICMP): %u\n", iphdr->ip_p);
   if (inet_ntop (AF_INET, &(iphdr->ip_src), src_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
-    fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s", strerror (status));
+    fprintf (stderr, "inet_ntop() failed for received source address.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "    Source IPv4 address: %s\n", src_ip);
   if (inet_ntop (AF_INET, &(iphdr->ip_dst), dst_ip, INET_ADDRSTRLEN) == NULL) {
     status = errno;
-    fprintf (stderr, "inet_ntop() failed for received destination address.\nError message: %s", strerror (status));
+    fprintf (stderr, "inet_ntop() failed for received destination address.\nError message: %s\n", strerror (status));
     exit (EXIT_FAILURE);
   }
   fprintf (stdout, "    Destination IPv4 address (expect IPv4 all-devices multi-cast address 224.0.0.1): %s\n\n", dst_ip);
@@ -221,7 +223,7 @@ main (void) {
   fprintf (stdout, "    Router address entry size (in units of 32-bit words): %u\n", icmphdr->entry_size);
   fprintf (stdout, "    Lifetime of validity of Router Advertisement (seconds): %u\n", ntohs (icmphdr->lifetime));
   fprintf (stdout, "    Number of IPv4 addresses associated with router: %u\n", icmphdr->num_addrs);
-  offset = ETH_HDRLEN + iphdrlen + ICMP_HDRLEN;  // Start of list of addresses and preference levels within ethernet frame
+  offset = ETH_HDRLEN + iphdrlen + ICMP_HDRLEN;  // Start of the router address/preference list within the Ethernet frame.
   for (i = 0; i < icmphdr->num_addrs; i++) {
     fprintf (stdout, "      Router %d IPv4 address: %u.%u.%u.%u\n",
      i, ether_frame[offset + 0],

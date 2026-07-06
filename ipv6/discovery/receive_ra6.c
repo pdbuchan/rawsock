@@ -37,6 +37,7 @@
 #include <errno.h>            // errno
 
 // Define some constants.
+#define MAC_LEN 6             // Length of a hardware (MAC) address
 #define TIMEOUT 60000         // Request timeout in milliseconds
 #define SLLA_OPTLEN 8         // Source Link-Layer Address option length.
 
@@ -188,7 +189,7 @@ main (void) {
   fprintf (stdout, "\nIPv6 header data:\n");
   opt = find_ancillary (&msghdr, IPV6_HOPLIMIT);
   if (opt == NULL) {
-    fprintf (stderr, "Unknown hop limit\n");
+    fprintf (stderr, "Hop Limit ancillary data not present.\n");
     exit (EXIT_FAILURE);
   }
   hoplimit = *(int *) opt;
@@ -200,7 +201,7 @@ main (void) {
 
   pktinfo = find_ancillary (&msghdr, IPV6_PKTINFO);
   if (pktinfo == NULL) {
-    fprintf (stderr, "Unknown destination address/interface index\n");
+    fprintf (stderr, "Destination address/interface index ancillary data not present.\n");
     exit (EXIT_FAILURE);
   }
 
@@ -229,15 +230,14 @@ main (void) {
 
   // Search all Neighbor Discovery options for the Source Link-Layer Address option.
   slla = find_nd_option (datagram, bytes, sizeof (struct nd_router_advert), ND_OPT_SOURCE_LINKADDR);
-  if (slla != NULL && slla[1] == 1) {  // Length 1 means 8 octets total: 2 bytes option header + 6-byte MAC address.
+  if (slla != NULL && slla[1] == SLLA_OPTLEN / 8) {  // Length 1 means 8 octets total: 2 bytes option header + 6-byte MAC address.
     fprintf (stdout, "\nSource Link-Layer Address option:\n");
     fprintf (stdout, "  Type: %u\n", slla[0]);
     fprintf (stdout, "  Length: %u (units of 8 octets)\n", slla[1]);
     fprintf (stdout, "  MAC address: ");
-    for (i = 2; i < 7; i++) {
-      fprintf (stdout, "%02x:", slla[i]);
+    for (i = 0; i < MAC_LEN; i++) {
+      fprintf (stdout, "%02x%s", slla[i + 2], (i < (MAC_LEN - 1)) ? ":" : "\n");
     }
-    fprintf (stdout, "%02x\n", slla[7]);
   } else {
     fprintf (stdout, "No Source Link-Layer Address option present.\n");
   }
@@ -266,7 +266,7 @@ find_ancillary (struct msghdr *msg, int cmsg_type) {
   return (NULL);
 }
 
-// Search received message for desired option.
+// Search received Neighbor Discovery message for desired option.
 static uint8_t *
 find_nd_option (uint8_t *msg, ssize_t msglen, size_t fixed_hdrlen, uint8_t opt_type) {
   
