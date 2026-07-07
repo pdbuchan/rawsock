@@ -121,7 +121,7 @@ main (void) {
 
   // ICMP data
   uint8_t icmp_data[] = {'T', 'e', 's', 't'};
-  icmp_datalen = 4;
+  icmp_datalen = sizeof (icmp_data);
 
   // IPv6 header
 
@@ -162,10 +162,10 @@ main (void) {
   // Message Type (8 bits): echo request
   icmphdr.icmp6_type = ICMP6_ECHO_REQUEST;
 
-  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; Set to 0.
   icmphdr.icmp6_code = 0;
 
-  // Identifier (16 bits): Usually pid of sending process; pick a number.
+  // Identifier (16 bits): Usually pid of sending process; Pick a number.
   icmphdr.icmp6_id = htons (1000);
 
   // Sequence Number (16 bits): Starts at 0.

@@ -105,7 +105,7 @@ main (void) {
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
-  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
+  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram.
 
   // Zero (1 bit)
   ip_flags[0] = 0;

@@ -496,7 +496,7 @@ main (void) {
   // FIN flag (1 bit)
   tcp_flags[0] = 0;
 
-  // SYN flag (1 bit): set to 1
+  // SYN flag (1 bit): Set to 1.
   tcp_flags[1] = 1;
 
   // RST flag (1 bit)

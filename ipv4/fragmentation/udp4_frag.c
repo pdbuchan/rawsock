@@ -273,7 +273,7 @@ main (void) {
                       + (ip_flags[2] << 13)
                       +  ip_flags[3]);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = 255;
 
   // Transport layer protocol (8 bits): 17 for UDP
@@ -314,7 +314,7 @@ main (void) {
   // Length of UDP datagram (16 bits): UDP header + UDP data
   udphdr.len = htons (UDP_HDRLEN + udp_datalen);
 
-  // UDP checksum (16 bits)
+  // UDP checksum (16 bits): Set to 0 for checksum calculation.
   udphdr.check = 0;
   udphdr.check = udp4_checksum (iphdr, udphdr, udp_data, udp_datalen);
 
@@ -369,7 +369,7 @@ main (void) {
                         + (ip_flags[2] << 13)
                         +  ip_flags[3]);
 
-    // IPv4 header checksum (16 bits)
+    // IPv4 header checksum (16 bits): Set to 0 for checksum calculation.
     iphdr.ip_sum = 0;
     iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 

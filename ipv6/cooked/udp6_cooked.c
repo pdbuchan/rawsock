@@ -125,8 +125,8 @@ main (void) {
   device.sll_halen = sizeof (dst_mac);
 
   // UDP data
-  uint8_t udp_data[4] = {'T', 'e', 's', 't'};
-  udp_datalen = 4;
+  uint8_t udp_data[] = {'T', 'e', 's', 't'};
+  udp_datalen = sizeof (udp_data);
 
   // IPv6 header
 

@@ -161,7 +161,7 @@ main (void) {
   // Message Type (8 bits): Router Solicitation
   rshdr.nd_rs_hdr.icmp6_type = ND_ROUTER_SOLICIT;
 
-  // Message Code (8 bits): Not used for router solicitation; set to 0.
+  // Message Code (8 bits): Not used for router solicitation; Set to 0.
   rshdr.nd_rs_hdr.icmp6_code = 0;
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.
@@ -174,8 +174,8 @@ main (void) {
 
   // Copy soliciting node's MAC address into router solicitation options buffer (i.e., icmp_data).
   uint8_t icmp_data[SLLA_OPTLEN];  // Source Link-Layer Address option.
-  icmp_data[0] = 1;  // Option Type - "source link layer address" (Section 4.6 of RFC 4861)
-  icmp_data[1] = SLLA_OPTLEN / 8;  // Option Length - units of 8 octets (RFC 4861)
+  icmp_data[0] = 1;  // Option Type - "source link-layer address" (Section 4.6 of RFC 4861)
+  icmp_data[1] = SLLA_OPTLEN / 8;  // Option Length; Units of 8 octets (RFC 4861)
   for (i = 0; i < MAC_LEN; i++) {
     icmp_data[i + 2] = (uint8_t) ifr.ifr_addr.sa_data[i];
   }

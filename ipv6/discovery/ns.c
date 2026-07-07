@@ -184,7 +184,7 @@ main (void) {
   // Message Type (8 bits): Neighbor Solicitation
   nshdr.nd_ns_hdr.icmp6_type = ND_NEIGHBOR_SOLICIT;
 
-  // Message Code (8 bits): Not used for neighbor solicitation; set to 0.
+  // Message Code (8 bits): Not used for neighbor solicitation; Set to 0.
   nshdr.nd_ns_hdr.icmp6_code = 0;
 
   // ICMP header checksum (16 bits): Set to 0 when calculating checksum.

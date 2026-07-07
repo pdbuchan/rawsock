@@ -281,7 +281,7 @@ main (void) {
                       + (ip_flags[2] << 13)
                       +  ip_flags[3]);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = 255;
 
   // Transport layer protocol (8 bits): 1 for ICMP
@@ -333,7 +333,8 @@ main (void) {
   memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);
   memcpy (icmp_msg + ICMP_HDRLEN, icmpdata, icmp_datalen);
 
-  // ICMP header checksum (16 bits)
+  // ICMP header checksum (16 bits): Set to 0 for checksum calculation.
+  // Already set to 0 above.
   icmphdr.icmp_cksum = icmp4_checksum (icmp_msg, ICMP_HDRLEN + icmp_datalen);
   memcpy (icmp_msg, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.
 
@@ -385,7 +386,7 @@ main (void) {
                         + (ip_flags[2] << 13)
                         +  ip_flags[3]);
 
-    // IPv4 header checksum (16 bits)
+    // IPv4 header checksum (16 bits): Set to 0 for checksum calculation.
     iphdr.ip_sum = 0;
     iphdr.ip_sum = checksum ((uint8_t *) &iphdr, IP4_HDRLEN);
 

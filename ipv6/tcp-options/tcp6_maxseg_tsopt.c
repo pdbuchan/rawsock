@@ -216,7 +216,7 @@ main (int argc, char **argv) {
   // Next header (8 bits): 6 for TCP
   iphdr.ip6_nxt = IPPROTO_TCP;
 
-  // Hop limit (8 bits): default to maximum value
+  // Hop limit (8 bits): Default to maximum value.
   iphdr.ip6_hops = 255;
 
   // Source IPv6 address (128 bits)
@@ -245,10 +245,10 @@ main (int argc, char **argv) {
   // Acknowledgement number (32 bits): 0 in first packet of SYN/ACK process
   tcphdr.th_ack = htonl (0);
 
-  // Reserved (4 bits): should be 0
+  // Reserved (4 bits): Should be 0.
   tcphdr.th_x2 = 0;
 
-  // Data offset (4 bits): size of TCP header + length of options, in 32-bit words
+  // Data offset (4 bits): Size of TCP header + length of options, in 32-bit words.
   tcphdr.th_off = (TCP_HDRLEN + buf_len) / 4;
 
   // Flags (8 bits)
@@ -256,7 +256,7 @@ main (int argc, char **argv) {
   // FIN flag (1 bit)
   tcp_flags[0] = 0;
 
-  // SYN flag (1 bit): set to 1
+  // SYN flag (1 bit): Set to 1.
   tcp_flags[1] = 1;
 
   // RST flag (1 bit)
@@ -288,7 +288,8 @@ main (int argc, char **argv) {
   // Urgent pointer (16 bits): 0 (only valid if URG flag is set)
   tcphdr.th_urp = htons (0);
 
-  // TCP checksum (16 bits)
+  // TCP checksum (16 bits): Set to 0 for checksum calculation.
+  tcphdr.th_sum = 0;
   tcphdr.th_sum = tcp6_checksum (iphdr, tcphdr, opt_buffer, buf_len);
 
   // Fill out ethernet frame header.

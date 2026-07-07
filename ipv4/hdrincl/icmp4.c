@@ -107,7 +107,7 @@ main (void) {
   // defines icmp_data as a macro, which would conflict with a variable
   // of the same name.
   uint8_t icmpdata[] = {'T', 'e', 's', 't'};
-  icmp_datalen = 4;
+  icmp_datalen = sizeof (icmpdata);
 
   // IPv4 header
 
@@ -126,7 +126,7 @@ main (void) {
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
-  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
+  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram.
 
   // Zero (1 bit)
   ip_flags[0] = 0;
@@ -145,7 +145,7 @@ main (void) {
                       + (ip_flags[2] << 13)
                       +  ip_flags[3]);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = 255;
 
   // Transport layer protocol (8 bits): 1 for ICMP

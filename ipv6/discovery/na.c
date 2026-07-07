@@ -74,7 +74,7 @@ main (void) {
   // Interface to send datagram through.
   snprintf (interface, sizeof (ifr.ifr_name), "enp7s0");
 
-  // Source (node sending advertisement) IPv6 link-local address: You need to fill this out.
+  // Source (node sending advertisement) IPv6 link-local address (fe80::/10): You need to fill this out.
   snprintf (source, INET6_ADDRSTRLEN, "fe80::");
 
   // Destination IPv6 address either:

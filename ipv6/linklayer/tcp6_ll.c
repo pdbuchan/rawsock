@@ -219,7 +219,7 @@ main (void) {
   // FIN flag (1 bit)
   tcp_flags[0] = 0;
 
-  // SYN flag (1 bit): set to 1
+  // SYN flag (1 bit): Set to 1.
   tcp_flags[1] = 1;
 
   // RST flag (1 bit)
@@ -286,16 +286,16 @@ main (void) {
 
   // Send Ethernet frame to socket.
   bytes = sendto (sd, ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
-    if (bytes == -1) {
-      status = errno;
-      fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
-      exit (EXIT_FAILURE);
-    }
-    // Check for short send.
-    if (bytes != frame_length) {
-      fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
-      exit (EXIT_FAILURE);
-    }
+  if (bytes == -1) {
+    status = errno;
+    fprintf (stderr, "sendto() failed.\nError message: %s\n", strerror (status));
+    exit (EXIT_FAILURE);
+  }
+  // Check for short send.
+  if (bytes != frame_length) {
+    fprintf (stderr, "sendto() sent %zd bytes but expected to send %d bytes.\n", bytes, frame_length);
+    exit (EXIT_FAILURE);
+  }
 
   // Close socket descriptor.
   close (sd);

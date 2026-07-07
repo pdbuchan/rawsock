@@ -104,8 +104,8 @@ main (void) {
   freeaddrinfo (res);
 
   // UDP data
-  uint8_t udp_data[4] = {'T', 'e', 's', 't'};
-  udp_datalen = 4;
+  uint8_t udp_data[] = {'T', 'e', 's', 't'};
+  udp_datalen = sizeof (udp_data);
 
   // IPv4 header
 
@@ -124,7 +124,7 @@ main (void) {
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
-  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
+  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram.
 
   // Zero (1 bit)
   ip_flags[0] = 0;
@@ -143,7 +143,7 @@ main (void) {
                       + (ip_flags[2] << 13)
                       +  ip_flags[3]);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = 255;
 
   // Transport layer protocol (8 bits): 17 for UDP
@@ -184,7 +184,7 @@ main (void) {
   // Length of UDP datagram (16 bits): UDP header + UDP data
   udphdr.len = htons (UDP_HDRLEN + udp_datalen);
 
-  // UDP checksum (16 bits)
+  // UDP checksum (16 bits): Set to 0 for checksum calculation.
   udphdr.check = 0;
   udphdr.check = udp4_checksum (iphdr, udphdr, udp_data, udp_datalen);
 

@@ -175,7 +175,7 @@ main (void) {
   // IPv4 Identification field (16 bits)
   iphdr.ip_id = htons ((uint16_t) (rand () & 0xffff));
 
-  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram
+  // Flags, and Fragmentation offset (3, 13 bits): 0 since single datagram.
 
   // Zero (1 bit)
   ip_flags[0] = 0;
@@ -194,7 +194,7 @@ main (void) {
                       + (ip_flags[2] << 13)
                       +  ip_flags[3]);
 
-  // Time-to-Live (8 bits): default to maximum value
+  // Time-to-Live (8 bits): Default to maximum value.
   iphdr.ip_ttl = 255;
 
   // Transport layer protocol (8 bits): 6 for TCP
@@ -233,17 +233,17 @@ main (void) {
   // Destination port number (16 bits)
   tcphdr.th_dport = htons (80);
 
-  // Sequence number (32 bits): random initial sequence number (ISN)
+  // Sequence number (32 bits): Random initial sequence number (ISN).
   seq = ((uint32_t) rand () << 16) | ((uint32_t) rand () & 0xffff);
   tcphdr.th_seq = htonl (seq);
 
-  // Acknowledgement number (32 bits): not used in initial SYN packet.
+  // Acknowledgement number (32 bits): Not used in initial SYN packet.
   tcphdr.th_ack = htonl (0);
 
-  // Reserved (4 bits): should be 0
+  // Reserved (4 bits): Should be 0.
   tcphdr.th_x2 = 0;
 
-  // Data offset (4 bits): size of TCP header in 32-bit words
+  // Data offset (4 bits): Size of TCP header in 32-bit words.
   tcphdr.th_off = TCP_HDRLEN / 4;
 
   // Flags (8 bits)
@@ -283,7 +283,7 @@ main (void) {
   // Urgent pointer (16 bits): 0 (only valid if URG flag is set)
   tcphdr.th_urp = htons (0);
 
-  // TCP checksum (16 bits)
+  // TCP checksum (16 bits): Set to 0 for checksum calculation.
   tcphdr.th_sum = 0;
   tcphdr.th_sum = tcp4_checksum (iphdr, tcphdr, NULL, 0, NULL, 0);
 

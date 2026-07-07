@@ -208,7 +208,7 @@ main (void) {
   // Message Type (8 bits): echo request
   send_icmphdr.icmp6_type = ICMP6_ECHO_REQUEST;
 
-  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; Set to 0.
   send_icmphdr.icmp6_code = 0;
 
   // Identifier (16 bits): Usually pid of sending process; Pick a number.

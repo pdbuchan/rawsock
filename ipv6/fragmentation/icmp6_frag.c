@@ -268,10 +268,10 @@ main (void) {
   // Message Type (8 bits): echo request
   icmphdr.icmp6_type = ICMP6_ECHO_REQUEST;
 
-  // Message Code (8 bits): Not used for Echo Request and Echo Reply; set to 0.
+  // Message Code (8 bits): Not used for Echo Request and Echo Reply; Set to 0.
   icmphdr.icmp6_code = 0;
 
-  // Identifier (16 bits): Usually pid of sending process; pick a number.
+  // Identifier (16 bits): Usually pid of sending process; Pick a number.
   icmphdr.icmp6_id = htons (1000);
 
   // Sequence Number (16 bits): Starts at 0.
@@ -288,7 +288,7 @@ main (void) {
   // ICMP data
   memcpy (fragbuffer + ICMP_HDRLEN, icmp_data, icmp_datalen);
 
-  // ICMP header checksum (16 bits)
+  // ICMP header checksum (16 bits): Set to 0 for checksum calculation.
   // Already set to 0 above.
   icmphdr.icmp6_cksum = icmp6_checksum (iphdr, fragbuffer, ICMP_HDRLEN + icmp_datalen);
   memcpy (fragbuffer, &icmphdr, ICMP_HDRLEN);  // Save ICMP header with checksum to datagram.

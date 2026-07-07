@@ -435,17 +435,17 @@ main (void) {
   // Destination port number (16 bits)
   tcphdr.th_dport = htons (80);
 
-  // Sequence number (32 bits): random initial sequence number (ISN)
+  // Sequence number (32 bits): Random initial sequence number (ISN).
   seq = ((uint32_t) rand () << 16) | ((uint32_t) rand () & 0xffff);
   tcphdr.th_seq = htonl (seq);
 
   // Acknowledgement number (32 bits): 0 in an initial SYN.
   tcphdr.th_ack = htonl (0);
 
-  // Reserved (4 bits): should be 0
+  // Reserved (4 bits): Should be 0.
   tcphdr.th_x2 = 0;
 
-  // Data offset (4 bits): size of TCP header in 32-bit words
+  // Data offset (4 bits): Size of TCP header in 32-bit words.
   tcphdr.th_off = TCP_HDRLEN / 4;
 
   // Flags (8 bits)
@@ -453,7 +453,7 @@ main (void) {
   // FIN flag (1 bit)
   tcp_flags[0] = 0;
 
-  // SYN flag (1 bit): set to 1
+  // SYN flag (1 bit): Set to 1.
   tcp_flags[1] = 1;
 
   // RST flag (1 bit)
