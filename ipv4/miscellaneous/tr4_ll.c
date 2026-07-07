@@ -194,7 +194,7 @@ main (void) {
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().
@@ -743,7 +743,7 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   seq = ((uint32_t) rand () << 16) | ((uint32_t) rand () & 0xffff);
   tcphdr.th_seq = htonl (seq);
 
-  // Acknowledgement number (32 bits): Not used in initial SYN packet.
+  // Acknowledgement number (32 bits): Not used in an initial SYN.
   tcphdr.th_ack = htonl (0);
 
   // Reserved (4 bits): Should be 0.

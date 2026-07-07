@@ -58,7 +58,7 @@ int
 main (void) {
 
   int i, n, status, icmp_datalen, fragbufferlen, frame_length, sd;
-  int mtu, frag_flags[2] = {0}, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
+  int mtu, frag_flags[2] = {0}, c, nframes, offset[MAX_FRAGS] = {0}, len[MAX_FRAGS] = {0};
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip6_hdr iphdr;
@@ -343,9 +343,9 @@ main (void) {
       fraghdr.ip6f_reserved = 0;  // Reserved
       frag_flags[1] = 0;  // Reserved
       if (i < (nframes - 1)) {
-        frag_flags[0] = 1;  // More fragments to follow
+        frag_flags[0] = 1;  // More fragments to follow.
       } else {
-        frag_flags[0] = 0;  // This is the last fragment
+        frag_flags[0] = 0;  // This is the last fragment.
       }
       fraghdr.ip6f_offlg = htons ((offset[i] << 3) + frag_flags[0] + (frag_flags[1] <<1));
       fraghdr.ip6f_ident = htonl (31415);

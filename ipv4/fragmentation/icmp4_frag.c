@@ -58,7 +58,7 @@ int
 main (void) {
 
   int i, n, status, frame_length, sd, icmp_datalen, bufferlen;
-  int ip_flags[4] = {0}, mtu, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
+  int ip_flags[4] = {0}, mtu, c, nframes, offset[MAX_FRAGS] = {0}, len[MAX_FRAGS] = {0};
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;

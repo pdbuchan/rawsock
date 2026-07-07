@@ -60,7 +60,7 @@ int
 main (void) {
 
   int i, n, status, tcp_datalen, frame_length, sd, fragbufferlen;
-  int mtu, frag_flags[2] = {0}, tcp_flags[8] = {0}, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
+  int mtu, frag_flags[2] = {0}, tcp_flags[8] = {0}, c, nframes, offset[MAX_FRAGS] = {0}, len[MAX_FRAGS] = {0};
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip6_hdr iphdr;
@@ -144,7 +144,7 @@ main (void) {
   // Fill out hints for getaddrinfo().
   memset (&hints, 0, sizeof (hints));
   hints.ai_family = AF_INET6;
-  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_socktype = 0;  // Address resolution only; any socket type.
   hints.ai_flags = hints.ai_flags | AI_CANONNAME;
 
   // Resolve target using getaddrinfo().
@@ -390,9 +390,9 @@ main (void) {
       fraghdr.ip6f_reserved = 0;  // Reserved
       frag_flags[1] = 0;  // Reserved
       if (i < (nframes - 1)) {
-        frag_flags[0] = 1;  // More fragments to follow
+        frag_flags[0] = 1;  // More fragments to follow.
       } else {
-        frag_flags[0] = 0;  // This is the last fragment
+        frag_flags[0] = 0;  // This is the last fragment.
       }
       fraghdr.ip6f_offlg = htons ((offset[i] << 3) + frag_flags[0] + (frag_flags[1] <<1));
       fraghdr.ip6f_ident = htonl (31415);

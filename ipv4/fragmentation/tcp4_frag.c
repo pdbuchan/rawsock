@@ -59,7 +59,7 @@ int
 main (void) {
 
   int i, n, status, frame_length, sd, tcp_datalen, bufferlen;
-  int ip_flags[4] = {0}, tcp_flags[8] = {0}, mtu, c, nframes, offset[MAX_FRAGS], len[MAX_FRAGS];
+  int ip_flags[4] = {0}, tcp_flags[8] = {0}, mtu, c, nframes, offset[MAX_FRAGS] = {0}, len[MAX_FRAGS] = {0};
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip;
   struct ip iphdr;
@@ -319,7 +319,7 @@ main (void) {
   seq = ((uint32_t) rand () << 16) | ((uint32_t) rand () & 0xffff);
   tcphdr.th_seq = htonl (seq);
 
-  // Acknowledgement number (32 bits): Not used in initial SYN packet.
+  // Acknowledgement number (32 bits): Not used in an initial SYN.
   tcphdr.th_ack = htonl (0);
 
   // Reserved (4 bits): Should be 0.
