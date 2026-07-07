@@ -1,6 +1,6 @@
 ## Miscellaneous - Some other useful functions
 
-To learn the next-hop's MAC address for use in the /linklayer and /cooked examples, you must use the Address Resolution Protocol (ARP). I have included an example which sends an ARP request ethernet frame as well as an example that receives an ARP reply ethernet frame.
+To learn the next-hop's MAC address for use in the /linklayer and /cooked examples, you must use the Address Resolution Protocol (ARP). I have included an example which sends an ARP request and listens for a received ARP reply ethernet frame.
 
 Additionally, I have included some router solicitation and advertisement routines.
 
