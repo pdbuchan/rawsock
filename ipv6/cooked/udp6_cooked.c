@@ -312,19 +312,19 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
   chksumlen += sizeof (iphdr.ip6_nxt);
 
   // Copy UDP source port to buf (16 bits)
-  memcpy (ptr, &udphdr.source, sizeof (udphdr.source));
-  ptr += sizeof (udphdr.source);
-  chksumlen += sizeof (udphdr.source);
+  memcpy (ptr, &udphdr.uh_sport, sizeof (udphdr.uh_sport));
+  ptr += sizeof (udphdr.uh_sport);
+  chksumlen += sizeof (udphdr.uh_sport);
 
   // Copy UDP destination port to buf (16 bits)
-  memcpy (ptr, &udphdr.dest, sizeof (udphdr.dest));
-  ptr += sizeof (udphdr.dest);
-  chksumlen += sizeof (udphdr.dest);
+  memcpy (ptr, &udphdr.uh_dport, sizeof (udphdr.uh_dport));
+  ptr += sizeof (udphdr.uh_dport);
+  chksumlen += sizeof (udphdr.uh_dport);
 
   // Copy UDP length again to buf (16 bits)
-  memcpy (ptr, &udphdr.len, sizeof (udphdr.len));
-  ptr += sizeof (udphdr.len);
-  chksumlen += sizeof (udphdr.len);
+  memcpy (ptr, &udphdr.uh_ulen, sizeof (udphdr.uh_ulen));
+  ptr += sizeof (udphdr.uh_ulen);
+  chksumlen += sizeof (udphdr.uh_ulen);
 
   // Copy UDP checksum to buf (16 bits)
   // Zero, since we don't know it yet

@@ -19,6 +19,7 @@
 // Need to have destination MAC address.
 
 #define _GNU_SOURCE           // Sometimes required for GNU/Linux-specific interfaces. e.g., SO_BINDTODEVICE
+#define __FAVOR_BSD           // Use BSD-style networking structures. e.g., struct tcphdr
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>           // close()
@@ -430,7 +431,7 @@ checksum (uint8_t *addr, int len) {
 uint16_t
 udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, int udp_datalen) {
 
-  int udp_segment_len, chksumlen = 0;
+  int udp_datagram_len, chksumlen = 0;
   uint8_t *buf, *ptr;
   uint16_t answer;
   uint32_t lvalue;
@@ -444,10 +445,10 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
     exit (EXIT_FAILURE);
   }
 
-  udp_segment_len = UDP_HDRLEN + udp_datalen;
+  udp_datagram_len = UDP_HDRLEN + udp_datalen;
 
   // Allocate memory for buffer.
-  buf = allocate_ustrmem (40 + udp_segment_len + 1);  // Add 1 for possible padding.
+  buf = allocate_ustrmem (40 + udp_datagram_len + 1);  // Add 1 for possible padding.
   ptr = &buf[0];  // ptr points to beginning of buffer buf
 
   // Copy source IP address into buf (128 bits)
@@ -461,7 +462,7 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
   chksumlen += sizeof (iphdr.ip6_dst.s6_addr);
 
   // Copy UDP length into buf (32 bits)
-  lvalue = htonl (udp_segment_len);
+  lvalue = htonl (udp_datagram_len);
   memcpy (ptr, &lvalue, sizeof (lvalue));
   ptr += sizeof (lvalue);
   chksumlen += sizeof (lvalue);
@@ -478,19 +479,19 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
   chksumlen += sizeof (iphdr.ip6_nxt);
 
   // Copy UDP source port to buf (16 bits)
-  memcpy (ptr, &udphdr.source, sizeof (udphdr.source));
-  ptr += sizeof (udphdr.source);
-  chksumlen += sizeof (udphdr.source);
+  memcpy (ptr, &udphdr.uh_sport, sizeof (udphdr.uh_sport));
+  ptr += sizeof (udphdr.uh_sport);
+  chksumlen += sizeof (udphdr.uh_sport);
 
   // Copy UDP destination port to buf (16 bits)
-  memcpy (ptr, &udphdr.dest, sizeof (udphdr.dest));
-  ptr += sizeof (udphdr.dest);
-  chksumlen += sizeof (udphdr.dest);
+  memcpy (ptr, &udphdr.uh_dport, sizeof (udphdr.uh_dport));
+  ptr += sizeof (udphdr.uh_dport);
+  chksumlen += sizeof (udphdr.uh_dport);
 
   // Copy UDP length again to buf (16 bits)
-  memcpy (ptr, &udphdr.len, sizeof (udphdr.len));
-  ptr += sizeof (udphdr.len);
-  chksumlen += sizeof (udphdr.len);
+  memcpy (ptr, &udphdr.uh_ulen, sizeof (udphdr.uh_ulen));
+  ptr += sizeof (udphdr.uh_ulen);
+  chksumlen += sizeof (udphdr.uh_ulen);
 
   // Copy UDP checksum to buf (16 bits)
   // Zero, since we don't know it yet
@@ -507,7 +508,7 @@ udp6_checksum (struct ip6_hdr iphdr, struct udphdr udphdr, uint8_t *udp_data, in
 
   // Pad to the next 16-bit boundary. The padding byte is used only for
   // checksum calculation and is not part of the UDP datagram length.
-  if ((udp_segment_len % 2) != 0) {
+  if ((udp_datagram_len % 2) != 0) {
     *ptr = 0;
     chksumlen++;
   }

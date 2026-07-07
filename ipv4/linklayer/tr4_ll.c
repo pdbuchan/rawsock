@@ -534,7 +534,7 @@ main (void) {
               if (status == 0) {
                 fprintf (stderr, "inet_pton() failed for received source address.\nError message: Invalid address\n");
               } else if (status < 0) {
-                fprintf (stderr, "inet_pton() failed for received source address.\nError message: %s\n", strerror (errno))
+                fprintf (stderr, "inet_pton() failed for received source address.\nError message: %s\n", strerror (errno));
               }
               exit (EXIT_FAILURE);
             }
@@ -692,7 +692,7 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Type of service (8 bits)
   iphdr.ip_tos = 0;
 
-  // Total length of datagram (16 bits): IP header + TCP header + data
+  // Total length of datagram (16 bits): IP header + TCP header + TCP data
   iphdr.ip_len = htons (IP4_HDRLEN + TCP_HDRLEN + datalen);
 
   // IPv4 Identification field (16 bits)
@@ -792,7 +792,7 @@ create_tcp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   return (EXIT_SUCCESS);
 }
 
-// Create a ICMP Ethernet frame.
+// Create an ICMP Ethernet frame.
 int
 create_icmp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t *src_mac, uint8_t *dst_mac,
                    uint16_t icmpid, uint16_t icmpseq, int ttl, uint8_t *data, int datalen) {
@@ -918,7 +918,7 @@ create_udp_frame (uint8_t *snd_ether_frame, char *src_ip, char *dst_ip, uint8_t 
   // Type of service (8 bits)
   iphdr.ip_tos = 0;
 
-  // Total length of datagram (16 bits): IP header + UDP header + datalen
+  // Total length of datagram (16 bits): IP header + UDP header + UDP data
   iphdr.ip_len = htons (IP4_HDRLEN + UDP_HDRLEN + datalen);
 
   // IPv4 Identification field (16 bits)
@@ -1236,24 +1236,24 @@ udp4_checksum (struct ip iphdr, struct udphdr udphdr, uint8_t *udp_data, int udp
   chksumlen += sizeof (iphdr.ip_p);
 
   // Copy UDP length to buf (16 bits)
-  memcpy (ptr, &udphdr.len, sizeof (udphdr.len));
-  ptr += sizeof (udphdr.len);
-  chksumlen += sizeof (udphdr.len);
+  memcpy (ptr, &udphdr.uh_ulen, sizeof (udphdr.uh_ulen));
+  ptr += sizeof (udphdr.uh_ulen);
+  chksumlen += sizeof (udphdr.uh_ulen);
 
   // Copy UDP source port to buf (16 bits)
-  memcpy (ptr, &udphdr.source, sizeof (udphdr.source));
-  ptr += sizeof (udphdr.source);
-  chksumlen += sizeof (udphdr.source);
+  memcpy (ptr, &udphdr.uh_sport, sizeof (udphdr.uh_sport));
+  ptr += sizeof (udphdr.uh_sport);
+  chksumlen += sizeof (udphdr.uh_sport);
 
   // Copy UDP destination port to buf (16 bits)
-  memcpy (ptr, &udphdr.dest, sizeof (udphdr.dest));
-  ptr += sizeof (udphdr.dest);
-  chksumlen += sizeof (udphdr.dest);
+  memcpy (ptr, &udphdr.uh_dport, sizeof (udphdr.uh_dport));
+  ptr += sizeof (udphdr.uh_dport);
+  chksumlen += sizeof (udphdr.uh_dport);
 
   // Copy UDP length again to buf (16 bits)
-  memcpy (ptr, &udphdr.len, sizeof (udphdr.len));
-  ptr += sizeof (udphdr.len);
-  chksumlen += sizeof (udphdr.len);
+  memcpy (ptr, &udphdr.uh_ulen, sizeof (udphdr.uh_ulen));
+  ptr += sizeof (udphdr.uh_ulen);
+  chksumlen += sizeof (udphdr.uh_ulen);
 
   // Copy UDP checksum to buf (16 bits)
   // Zero, since we don't know it yet
