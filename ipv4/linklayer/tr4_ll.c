@@ -290,7 +290,7 @@ main (void) {
   trycount = 0;
   probes = 0;
 
-  // SEND LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
+  // OUTER SEND LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
   for (;;) {
 
     // Create probe packet.
@@ -364,7 +364,7 @@ main (void) {
     //     Outer IP header + Inner IP header + ICMP (port unreachable) + payload
     // Keep listening for up to TIMEOUT seconds, or until a reply is received.
 
-    // RECEIVE LOOP
+    // INNER RECEIVE LOOP
     for (;;) {
 
       memset (rec_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);

@@ -285,7 +285,7 @@ main (void) {
   trycount = 0;
   probes = 0;
 
-  // SEND LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
+  // OUTER SEND LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
   for (;;) {
 
     // Create probe packet.
@@ -323,8 +323,6 @@ main (void) {
         exit (EXIT_FAILURE);
 
     }  // End switch
-
-    // SEND
 
     // Send Ethernet frame to socket.
     bytes = sendto (sendsd, snd_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
@@ -365,7 +363,7 @@ main (void) {
     //
     // Keep listening for up to TIMEOUT seconds, or until a reply is received.
 
-    // RECEIVE LOOP
+    // INNER RECEIVE LOOP
     for (;;) {
 
       memset (rec_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
