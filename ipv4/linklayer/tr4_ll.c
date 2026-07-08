@@ -285,11 +285,12 @@ main (void) {
   // Start at Time-to-Live (TTL) = 1. i.e., one hop
   node = 1;
 
-  // LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
+  // Initialize some parameters.
   done = 0;
   trycount = 0;
   probes = 0;
 
+  // SEND LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
   for (;;) {
 
     // Create probe packet.
@@ -326,8 +327,6 @@ main (void) {
         exit (EXIT_FAILURE);
 
     }  // End switch
-
-    // SEND
 
     // Send Ethernet frame to socket.
     bytes = sendto (sendsd, snd_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));

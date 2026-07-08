@@ -280,11 +280,12 @@ main (void) {
   // Start at Hop Limit = 1. i.e., one hop.
   node = 1;
 
-  // Loop, incrementing Hop Limit each cycle, exiting when we get our target IP address.
+  // Initialize some parameters.
   done = 0;
   trycount = 0;
   probes = 0;
 
+  // SEND LOOP: incrementing TTL each cycle, exiting when we get our target IP address.
   for (;;) {
 
     // Create probe packet.
