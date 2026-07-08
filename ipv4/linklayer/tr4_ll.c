@@ -74,9 +74,10 @@ main (void) {
   ssize_t bytes;
   char *interface, *target, *src_ip, *dst_ip, *rec_ip, *tcp_dat, *icmp_dat, *udp_dat;
   char hostname[HOST_NAME_MAX];
-  struct ip *iphdr;
-  struct tcphdr *tcphdr;
-  struct icmp *icmphdr;
+  struct ip *iphdr, *inner_ip;
+  struct tcphdr *tcphdr, *inner_tcp;
+  struct icmp *icmphdr, *inner_icmp;
+  struct udphdr *inner_udp;
   uint8_t src_mac[MAC_LEN] = {0};
   uint8_t *snd_ether_frame, *rec_ether_frame;
   uint8_t *data;
@@ -85,10 +86,6 @@ main (void) {
   struct sockaddr_in dst, sa;
   struct sockaddr_ll device, from;
   struct ifreq ifr;
-  struct ip *inner_ip;
-  struct tcphdr *inner_tcp;
-  struct icmp *inner_icmp;
-  struct udphdr *inner_udp;
   socklen_t fromlen;
   struct timespec t1, t2;
   struct pollfd pfd;
@@ -295,42 +292,42 @@ main (void) {
 
   for (;;) {
 
-  // Create probe packet.
-  probe_index = ((node - 1) * num_probes) + probes;
-  tcp_sport = htons (49152 + probe_index % 16384);  // Some random, high ephemeral port number; Some firewalls dislike packets claiming to originate from Port 80.
-  icmpseq = htons (probe_index);  // ICMP sequence number (16 bits)
-  udp_dport = htons (33434 + probe_index);  // UDP destination port (16 bits)
-  memset (snd_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
-  switch (packet_type) {
+    // Create probe packet.
+    probe_index = ((node - 1) * num_probes) + probes;
+    tcp_sport = htons (49152 + probe_index % 16384);  // Some random, high ephemeral port number; Some firewalls dislike packets claiming to originate from Port 80.
+    icmpseq = htons (probe_index);  // ICMP sequence number (16 bits)
+    udp_dport = htons (33434 + probe_index);  // UDP destination port (16 bits)
+    memset (snd_ether_frame, 0, ETH_HDRLEN + IP_MAXPACKET);
+    switch (packet_type) {
 
-    case 1:  // TCP
-      datalen = strlen (tcp_dat);
-      memcpy (data, tcp_dat, datalen);
-      create_tcp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, tcp_sport, node, data, datalen);
-      frame_length = ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN + datalen;
-      break;
+      case 1:  // TCP
+        datalen = strlen (tcp_dat);
+        memcpy (data, tcp_dat, datalen);
+        create_tcp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, tcp_sport, node, data, datalen);
+        frame_length = ETH_HDRLEN + IP4_HDRLEN + TCP_HDRLEN + datalen;
+        break;
 
-    case 2:  // ICMP
-      datalen = strlen (icmp_dat);
-      memcpy (data, icmp_dat, datalen);
-      create_icmp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, icmpid, icmpseq, node, data, datalen);
-      frame_length = ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN + datalen;
-      break;
+      case 2:  // ICMP
+        datalen = strlen (icmp_dat);
+        memcpy (data, icmp_dat, datalen);
+        create_icmp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, icmpid, icmpseq, node, data, datalen);
+        frame_length = ETH_HDRLEN + IP4_HDRLEN + ICMP_HDRLEN + datalen;
+        break;
 
-    case 3:  // UDP
-      datalen = strlen (udp_dat);
-      memcpy (data, udp_dat, datalen);
-      create_udp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, udp_sport, udp_dport, node, data, datalen);
-      frame_length = ETH_HDRLEN + IP4_HDRLEN + UDP_HDRLEN + datalen;
-      break;
+      case 3:  // UDP
+        datalen = strlen (udp_dat);
+        memcpy (data, udp_dat, datalen);
+        create_udp_frame (snd_ether_frame, src_ip, dst_ip, src_mac, dst_mac, udp_sport, udp_dport, node, data, datalen);
+        frame_length = ETH_HDRLEN + IP4_HDRLEN + UDP_HDRLEN + datalen;
+        break;
 
-    default:
-      fprintf (stderr, "Unknown packet type: %d\n", packet_type);
-      exit (EXIT_FAILURE);
+      default:
+        fprintf (stderr, "Unknown packet type: %d\n", packet_type);
+        exit (EXIT_FAILURE);
 
-  }  // End switch
+    }  // End switch
 
-  // SEND
+    // SEND
 
     // Send Ethernet frame to socket.
     bytes = sendto (sendsd, snd_ether_frame, frame_length, 0, (struct sockaddr *) &device, sizeof (device));
@@ -605,6 +602,7 @@ main (void) {
               if (inner_ip->ip_p != IPPROTO_UDP) continue;
               if (inner_udp->uh_sport != udp_sport) continue;
               if (inner_udp->uh_dport != udp_dport) continue;
+              break;
 
           }  // End switch
 
@@ -649,7 +647,7 @@ main (void) {
       continue;
     }
 
-  }  // End of Send loop.
+  }  // End of Send loop
 
   // Close socket descriptors.
   close (sendsd);
