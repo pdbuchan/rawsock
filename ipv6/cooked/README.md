@@ -6,7 +6,7 @@ As in the IPv4 cooked packet examples, here we fill out all values, but only inc
 | :--- | :--- |
 | tcp6_cooked.c | Send SYN packet (an example with no TCP data). |
 | get6_cooked.c | Send HTTP GET (an example with TCP data) (Note 2). |
-| icmp6_cooked.c | Send ICMP Echo Request with data. |
+| icmp6_cooked.c | Send ICMPv6 Echo Request with data. |
 | udp6_cooked.c | Send UDP packet with data. |
 
 ### Note 1

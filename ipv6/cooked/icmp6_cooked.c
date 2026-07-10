@@ -14,7 +14,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-// Send a "cooked" IPv6 ICMP Echo Request datagram via packet socket.
+// Send a "cooked" ICMPv6 Echo Request datagram via packet socket.
 // Need to specify the next-hop destination MAC address.
 // Includes some ICMP data.
 
